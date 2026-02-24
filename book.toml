@@ -1,0 +1,10 @@
+[book]
+title = "Go 併發編程實戰課"
+authors = []
+language = "zh-TW"
+multilingual = false
+src = "src"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
