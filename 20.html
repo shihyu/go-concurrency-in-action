@@ -175,28 +175,43 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="19--在分佈式環境中leader選舉互斥鎖和讀寫鎖該如何實現"><a class="header" href="#19--在分佈式環境中leader選舉互斥鎖和讀寫鎖該如何實現">19 | 在分佈式環境中，Leader選舉、互斥鎖和讀寫鎖該如何實現？</a></h1>
+                        <h1 id="19在分散式環境中leader-選舉互斥鎖和讀寫鎖該如何實作"><a class="header" href="#19在分散式環境中leader-選舉互斥鎖和讀寫鎖該如何實作">19｜在分散式環境中，Leader 選舉、互斥鎖和讀寫鎖該如何實作？</a></h1>
 <p>你好，我是鳥窩。</p>
-<p>在前面的課程裡，我們學習的併發原語都是在進程內使用的，也就是我們常見的一個運行程序為了控制共享資源、實現任務編排和進行消息傳遞而提供的控制類型。在接下來的這兩節課裡，我要講的是幾個分佈式的併發原語，它們控制的資源或編排的任務分佈在不同進程、不同機器上。</p>
-<p>分佈式的併發原語實現更加複雜，因為在分佈式環境中，網絡狀況、服務狀態都是不可控的。不過還好有相應的軟件系統去做這些事情。這些軟件系統會專門去處理這些節點之間的協調和異常情況，並且保證數據的一致性。我們要做的就是在它們的基礎上實現我們的業務。</p>
-<p>常用來做協調工作的軟件系統是 Zookeeper、etcd、Consul 之類的軟件，Zookeeper 為 Java 生態群提供了豐富的分佈式併發原語（通過 Curator 庫），但是缺少 Go 相關的併發原語庫。Consul 在提供分佈式併發原語這件事兒上不是很積極，而 etcd 就提供了非常好的分佈式併發原語，比如分佈式互斥鎖、分佈式讀寫鎖、Leader 選舉，等等。所以，今天，我就以 etcd 為基礎，給你介紹幾種分佈式併發原語。</p>
-<p>既然我們依賴 etcd，那麼，在生產環境中要有一個 etcd 集群，而且應該保證這個 etcd 集群是 7*24 工作的。在學習過程中，你可以使用一個 etcd 節點進行測試。</p>
+<h2 id="本章導讀"><a class="header" href="#本章導讀">本章導讀</a></h2>
+<pre><code class="language-text">       etcd 分散式併發原語：Leader / Lock / RWLock
+
+┌──────────┐     lease/session     ┌──────────────┐
+│ 節點 A    │ ────────────────────&gt; │    etcd      │
+├──────────┤                        └──────┬───────┘
+│ 節點 B    │ ─────────────────────────────┤
+├──────────┤                                │
+│ 節點 C    │ ─────────────────────────────┘
+└──────────┘                                │
+                                            ▼
+                                  [選主 / 鎖競爭 / 讀寫鎖]
+
+重點：把協調一致性工作交給 etcd，業務端專注流程控制
+</code></pre>
+<p>在前面的課程裡，我們學習的併發原語都是在行程內使用的，也就是我們常見的一個執行程式為了控制共享資源、實作任務編排和進行訊息傳遞而提供的控制型別。在接下來的這兩節課裡，我要講的是幾個分散式的併發原語，它們控制的資源或編排的任務分佈在不同行程、不同機器上。</p>
+<p>分散式的併發原語實作更加複雜，因為在分散式環境中，網路狀況、服務狀態都是不可控的。不過還好有相應的軟體系統去做這些事情。這些軟體系統會專門去處理這些節點之間的協調和異常情況，並且保證資料的一致性。我們要做的就是在它們的基礎上實作我們的業務。</p>
+<p>常用來做協調工作的軟體系統是 Zookeeper、etcd、Consul 之類的軟體，Zookeeper 為 Java 生態群提供了豐富的分散式併發原語（透過 Curator 庫），但是缺少 Go 相關的併發原語庫。Consul 在提供分散式併發原語這件事兒上不是很積極，而 etcd 就提供了非常好的分散式併發原語，比如分散式互斥鎖、分散式讀寫鎖、Leader 選舉，等等。所以，今天，我就以 etcd 為基礎，給你介紹幾種分散式併發原語。</p>
+<p>既然我們依賴 etcd，那麼，在生產環境中要有一個 etcd 叢集，而且應該保證這個 etcd 叢集是 7*24 工作的。在學習過程中，你可以使用一個 etcd 節點進行測試。</p>
 <p>這節課我要介紹的就是 Leader 選舉、互斥鎖和讀寫鎖。</p>
 <h1 id="leader-選舉"><a class="header" href="#leader-選舉">Leader 選舉</a></h1>
 <p>Leader 選舉常常用在主從架構的系統中。主從架構中的服務節點分為主（Leader、Master）和從（Follower、Slave）兩種角色，實際節點包括 1 主 n 從，一共是 n+1 個節點。</p>
 <p>主節點常常執行寫操作，從節點常常執行讀操作，如果讀寫都在主節點，從節點只是提供一個備份功能的話，那麼，主從架構就會退化成主備模式架構。</p>
 <p>主從架構中最重要的是如何確定節點的角色，也就是，到底哪個節點是主，哪個節點是從？</p>
-<p><strong>在同一時刻，系統中不能有兩個主節點，否則，如果兩個節點都是主，都執行寫操作的話，就有可能出現數據不一致的情況，所以，我們需要一個選主機制，選擇一個節點作為主節點，這個過程就是 Leader 選舉</strong>。</p>
+<p><strong>在同一時刻，系統中不能有兩個主節點，否則，如果兩個節點都是主，都執行寫操作的話，就有可能出現資料不一致的情況，所以，我們需要一個選主機制，選擇一個節點作為主節點，這個過程就是 Leader 選舉</strong>。</p>
 <p>當主節點宕機或者是不可用時，就需要新一輪的選舉，從其它的從節點中選擇出一個節點，讓它作為新主節點，宕機的原主節點恢復後，可以變為從節點，或者被摘掉。</p>
-<p>我們可以通過 etcd 基礎服務來實現 leader 選舉。具體點說，我們可以將 Leader 選舉的邏輯交給 etcd 基礎服務，這樣，我們只需要把重心放在業務開發上。etcd 基礎服務可以通過多節點的方式保證 7*24 服務，所以，我們也不用擔心 Leader 選舉不可用的問題。如下圖所示：</p>
+<p>我們可以透過 etcd 基礎服務來實作 leader 選舉。具體點說，我們可以將 Leader 選舉的邏輯交給 etcd 基礎服務，這樣，我們只需要把重心放在業務開發上。etcd 基礎服務可以透過多節點的方式保證 7*24 服務，所以，我們也不用擔心 Leader 選舉不可用的問題。如下圖所示：</p>
 <p><img src="./images/6fe14c445d5c38b2813d27579d9cd005.png" alt="" /></p>
 <p>接下來，我會給你介紹業務開發中跟 Leader 選舉相關的選舉、查詢、Leader 變動監控等功能。</p>
-<p>我要先提醒你一句，如果你想運行我下面講到的測試代碼，就要先部署一個 etcd 的集群，或者部署一個 etcd 節點做測試。</p>
-<p>首先，我們來實現一個測試分佈式程序的框架：它會先從命令行中讀取命令，然後再執行相應的命令。你可以打開兩個窗口，模擬不同的節點，分別執行不同的命令。</p>
-<p>這個測試程序如下：</p>
+<p>我要先提醒你一句，如果你想執行我下面講到的測試程式碼，就要先部署一個 etcd 的叢集，或者部署一個 etcd 節點做測試。</p>
+<p>首先，我們來實作一個測試分散式程式的框架：它會先從命令列中讀取命令，然後再執行相應的命令。你可以開啟兩個視窗，模擬不同的節點，分別執行不同的命令。</p>
+<p>這個測試程式如下：</p>
 <pre><code class="language-go">package main
 
-// 導入所需的庫
+// 匯入所需的庫
 import (
     "bufio"
     "context"
@@ -211,7 +226,7 @@ import (
     "github.com/coreos/etcd/clientv3/concurrency"
 )
 
-// 可以設置一些參數，比如節點ID
+// 可以設定一些引數，比如節點ID
 var (
     nodeID    = flag.Int("id", 0, "node ID")
     addr      = flag.String("addr", "http://127.0.0.1:2379", "etcd addresses")
@@ -231,15 +246,15 @@ func main() {
     }
     defer cli.Close()
 
-    // 創建session,如果程序宕機導致session斷掉，etcd能檢測到
+    // 建立session,如果程式宕機導致session斷掉，etcd能檢測到
     session, err := concurrency.NewSession(cli)
     defer session.Close()
 
-    // 生成一個選舉對象。下面主要使用它進行選舉和查詢等操作
+    // 生成一個選舉物件。下面主要使用它進行選舉和查詢等操作
     // 另一個方法ResumeElection可以使用既有的leader初始化Election
     e1 := concurrency.NewElection(session, *electName)
 
-    // 從命令行讀取命令
+    // 從命令列讀取命令
     consolescanner := bufio.NewScanner(os.Stdin)
     for consolescanner.Scan() {
         action := consolescanner.Text()
@@ -264,39 +279,39 @@ func main() {
 </code></pre>
 <p>部署完以後，我們就可以開始選舉了。</p>
 <h2 id="選舉"><a class="header" href="#選舉">選舉</a></h2>
-<p>如果你的業務集群還沒有主節點，或者主節點宕機了，你就需要發起新一輪的選主操作，主要會用到 <strong>Campaign 和 Proclaim</strong>。如果你需要主節點放棄主的角色，讓其它從節點有機會成為主節點，就可以調用 <strong>Resign</strong> 方法。</p>
+<p>如果你的業務叢集還沒有主節點，或者主節點宕機了，你就需要發起新一輪的選主操作，主要會用到 <strong>Campaign 和 Proclaim</strong>。如果你需要主節點放棄主的角色，讓其它從節點有機會成為主節點，就可以呼叫 <strong>Resign</strong> 方法。</p>
 <p>這裡我提到了三個和選主相關的方法，下面我來介紹下它們的用法。</p>
-<p><strong>第一個方法是 Campaign</strong>。它的作用是，把一個節點選舉為主節點，並且會設置一個值。它的簽名如下所示：</p>
+<p><strong>第一個方法是 Campaign</strong>。它的作用是，把一個節點選舉為主節點，並且會設定一個值。它的簽名如下所示：</p>
 <pre><code class="language-go">func (e *Election) Campaign(ctx context.Context, val string) error
 </code></pre>
-<p>需要注意的是，這是一個阻塞方法，在調用它的時候會被阻塞，直到滿足下面的三個條件之一，才會取消阻塞。</p>
+<p>需要注意的是，這是一個阻塞方法，在呼叫它的時候會被阻塞，直到滿足下面的三個條件之一，才會取消阻塞。</p>
 <ol>
 <li>成功當選為主；</li>
 <li>此方法返回錯誤；</li>
 <li>ctx 被取消。</li>
 </ol>
-<p><strong>第二個方法是 Proclaim</strong>。它的作用是，重新設置 Leader 的值，但是不會重新選主，這個方法會返回新值設置成功或者失敗的信息。方法簽名如下所示：</p>
+<p><strong>第二個方法是 Proclaim</strong>。它的作用是，重新設定 Leader 的值，但是不會重新選主，這個方法會返回新值設定成功或者失敗的資訊。方法簽名如下所示：</p>
 <pre><code class="language-go">func (e *Election) Proclaim(ctx context.Context, val string) error
 </code></pre>
-<p><strong>第三個方法是 Resign</strong>：開始新一次選舉。這個方法會返回新的選舉成功或者失敗的信息。它的簽名如下所示：</p>
+<p><strong>第三個方法是 Resign</strong>：開始新一次選舉。這個方法會返回新的選舉成功或者失敗的資訊。它的簽名如下所示：</p>
 <pre><code class="language-go">func (e *Election) Resign(ctx context.Context) (err error)
 </code></pre>
-<p>這三個方法的測試代碼如下。你可以使用測試程序進行測試，具體做法是，啟動兩個節點，執行和這三個方法相關的命令。</p>
+<p>這三個方法的測試程式碼如下。你可以使用測試程式進行測試，具體做法是，啟動兩個節點，執行和這三個方法相關的命令。</p>
 <pre><code class="language-go">var count int
 // 選主
 func elect(e1 *concurrency.Election, electName string) {
     log.Println("acampaigning for ID:", *nodeID)
-    // 調用Campaign方法選主,主的值為value-&lt;主節點ID&gt;-&lt;count&gt;
+    // 呼叫Campaign方法選主,主的值為value-&lt;主節點ID&gt;-&lt;count&gt;
     if err := e1.Campaign(context.Background(), fmt.Sprintf("value-%d-%d", *nodeID, count)); err != nil {
         log.Println(err)
     }
     log.Println("campaigned for ID:", *nodeID)
     count++
 }
-// 為主設置新值
+// 為主設定新值
 func proclaim(e1 *concurrency.Election, electName string) {
     log.Println("proclaiming for ID:", *nodeID)
-    // 調用Proclaim方法設置新值,新值為value-&lt;主節點ID&gt;-&lt;count&gt;
+    // 呼叫Proclaim方法設定新值,新值為value-&lt;主節點ID&gt;-&lt;count&gt;
     if err := e1.Proclaim(context.Background(), fmt.Sprintf("value-%d-%d", *nodeID, count)); err != nil {
         log.Println(err)
     }
@@ -306,40 +321,40 @@ func proclaim(e1 *concurrency.Election, electName string) {
 // 重新選主，有可能另外一個節點被選為了主
 func resign(e1 *concurrency.Election, electName string) {
     log.Println("resigning for ID:", *nodeID)
-    // 調用Resign重新選主
+    // 呼叫Resign重新選主
     if err := e1.Resign(context.TODO()); err != nil {
         log.Println(err)
     }
     log.Println("resigned for ID:", *nodeID)
-}查詢除了選舉 Leader，程序在啟動的過程中，或者在運行的時候，還有可能需要查詢當前的主節點是哪一個節點？主節點的值是什麼？版本是多少？不光是主從節點需要查詢和知道哪一個節點，在分佈式系統中，還有其它一些節點也需要知道集群中的哪一個節點是主節點，哪一個節點是從節點，這樣它們才能把讀寫請求分別發往相應的主從節點上。
+}查詢除了選舉 Leader，程式在啟動的過程中，或者在執行的時候，還有可能需要查詢當前的主節點是哪一個節點？主節點的值是什麼？版本是多少？不光是主從節點需要查詢和知道哪一個節點，在分散式系統中，還有其它一些節點也需要知道叢集中的哪一個節點是主節點，哪一個節點是從節點，這樣它們才能把讀寫請求分別發往相應的主從節點上。
 </code></pre>
-<p>etcd 提供了查詢當前 Leader 的方法 <strong>Leader</strong>，如果當前還沒有 Leader，就返回一個錯誤，你可以使用這個方法來查詢主節點信息。這個方法的簽名如下：</p>
+<p>etcd 提供了查詢當前 Leader 的方法 <strong>Leader</strong>，如果當前還沒有 Leader，就返回一個錯誤，你可以使用這個方法來查詢主節點資訊。這個方法的簽名如下：</p>
 <pre><code class="language-go">func (e *Election) Leader(ctx context.Context) (*v3.GetResponse, error)
 </code></pre>
-<p>每次主節點的變動都會生成一個新的版本號，你還可以查詢版本號信息（<strong>Rev</strong> 方法），瞭解主節點變動情況：</p>
+<p>每次主節點的變動都會生成一個新的版本號，你還可以查詢版本號資訊（<strong>Rev</strong> 方法），瞭解主節點變動情況：</p>
 <pre><code class="language-go">func (e *Election) Rev() int64
 </code></pre>
-<p>你可以在測試完選主命令後，測試查詢命令（query、rev），代碼如下：</p>
-<pre><code class="language-go">// 查詢主的信息
+<p>你可以在測試完選主命令後，測試查詢命令（query、rev），程式碼如下：</p>
+<pre><code class="language-go">// 查詢主的資訊
 func query(e1 *concurrency.Election, electName string) {
-    // 調用Leader返回主的信息，包括key和value等信息
+    // 呼叫Leader返回主的資訊，包括key和value等資訊
     resp, err := e1.Leader(context.Background())
     if err != nil {
         log.Printf("failed to get the current leader: %v", err)
     }
     log.Println("current leader:", string(resp.Kvs[0].Key), string(resp.Kvs[0].Value))
 }
-// 可以直接查詢主的rev信息
+// 可以直接查詢主的rev資訊
 func rev(e1 *concurrency.Election, electName string) {
     rev := e1.Rev()
     log.Println("current rev:", rev)
-}監控有了選舉和查詢方法，我們還需要一個監控方法。畢竟，如果主節點變化了，我們需要得到最新的主節點信息。
+}監控有了選舉和查詢方法，我們還需要一個監控方法。畢竟，如果主節點變化了，我們需要得到最新的主節點資訊。
 </code></pre>
-<p>我們可以通過 Observe 來監控主的變化，它的簽名如下：</p>
+<p>我們可以透過 Observe 來監控主的變化，它的簽名如下：</p>
 <pre><code class="language-go">func (e *Election) Observe(ctx context.Context) &lt;-chan v3.GetResponse
 </code></pre>
-<p>它會返回一個 chan，顯示主節點的變動信息。需要注意的是，它不會返回主節點的全部歷史變動信息，而是隻返回最近的一條變動信息以及之後的變動信息。</p>
-<p>它的測試代碼如下：</p>
+<p>它會返回一個 chan，顯示主節點的變動資訊。需要注意的是，它不會返回主節點的全部歷史變動資訊，而是隻返回最近的一條變動資訊以及之後的變動資訊。</p>
+<p>它的測試程式碼如下：</p>
 <pre><code class="language-go">func watch(e1 *concurrency.Election, electName string) {
     ch := e1.Observe(context.TODO())
 
@@ -350,18 +365,18 @@ func rev(e1 *concurrency.Election, electName string) {
     }
 }
 </code></pre>
-<p>etcd 提供了選主的邏輯，而你要做的就是利用這些方法，讓它們為你的業務服務。在使用的過程中，你還需要做一些額外的設置，比如查詢當前的主節點、啟動一個 goroutine 阻塞調用 Campaign 方法，等等。雖然你需要做一些額外的工作，但是跟自己實現一個分佈式的選主邏輯相比，大大地減少了工作量。</p>
-<p>接下來，我們繼續看 etcd 提供的分佈式併發原語：互斥鎖。</p>
+<p>etcd 提供了選主的邏輯，而你要做的就是利用這些方法，讓它們為你的業務服務。在使用的過程中，你還需要做一些額外的設定，比如查詢當前的主節點、啟動一個 goroutine 阻塞呼叫 Campaign 方法，等等。雖然你需要做一些額外的工作，但是跟自己實作一個分散式的選主邏輯相比，大大地減少了工作量。</p>
+<p>接下來，我們繼續看 etcd 提供的分散式併發原語：互斥鎖。</p>
 <h1 id="互斥鎖"><a class="header" href="#互斥鎖">互斥鎖</a></h1>
 <p>互斥鎖是非常常用的一種併發原語，我專門花了 4 講的時間，重點介紹了互斥鎖的功能、原理和易錯場景。</p>
-<p>不過，前面說的互斥鎖都是用來保護同一進程內的共享資源的，今天，我們要掌握的是分佈式環境中的互斥鎖。<strong>我們要重點學習下分佈在不同機器中的不同進程內的 goroutine，如何利用分佈式互斥鎖來保護共享資源。</strong></p>
+<p>不過，前面說的互斥鎖都是用來保護同一行程內的共享資源的，今天，我們要掌握的是分散式環境中的互斥鎖。<strong>我們要重點學習下分佈在不同機器中的不同行程內的 goroutine，如何利用分散式互斥鎖來保護共享資源。</strong></p>
 <p>互斥鎖的應用場景和主從架構的應用場景不太一樣。<strong>使用互斥鎖的不同節點是沒有主從這樣的角色的，所有的節點都是一樣的，只不過在同一時刻，只允許其中的一個節點持有鎖</strong>。</p>
 <p>下面，我們就來學習下互斥鎖相關的兩個原語，即 Locker 和 Mutex。</p>
 <h2 id="locker"><a class="header" href="#locker">Locker</a></h2>
-<p>etcd 提供了一個簡單的 Locker 原語，它類似於 Go 標準庫中的 sync.Locker 接口，也提供了 Lock/UnLock 的機制：</p>
+<p>etcd 提供了一個簡單的 Locker 原語，它類似於 Go 標準庫中的 sync.Locker 介面，也提供了 Lock/UnLock 的機制：</p>
 <pre><code class="language-go">func NewLocker(s *Session, pfx string) sync.Locker
 </code></pre>
-<p>可以看到，它的返回值是一個 sync.Locker，因為你對標準庫的 Locker 已經非常瞭解了，而且它只有 Lock/Unlock 兩個方法，所以，接下來使用這個鎖就非常容易了。下面的代碼是一個使用 Locker 併發原語的例子：</p>
+<p>可以看到，它的返回值是一個 sync.Locker，因為你對標準庫的 Locker 已經非常瞭解了，而且它只有 Lock/Unlock 兩個方法，所以，接下來使用這個鎖就非常容易了。下面的程式碼是一個使用 Locker 併發原語的例子：</p>
 <pre><code class="language-go">package main
 
 import (
@@ -402,7 +417,7 @@ func useLock(cli *clientv3.Client) {
         log.Fatal(err)
     }
     defer s1.Close()
-    //得到一個分佈式鎖
+    //得到一個分散式鎖
     locker := concurrency.NewLocker(s1, *lockName)
 
     // 請求鎖
@@ -417,9 +432,9 @@ func useLock(cli *clientv3.Client) {
     log.Println("released lock")
 }
 </code></pre>
-<p>你可以同時在兩個終端中運行這個測試程序。可以看到，它們獲得鎖是有先後順序的，一個節點釋放了鎖之後，另外一個節點才能獲取到這個分佈式鎖。</p>
+<p>你可以同時在兩個終端中執行這個測試程式。可以看到，它們獲得鎖是有先後順序的，一個節點釋放了鎖之後，另外一個節點才能獲取到這個分散式鎖。</p>
 <h2 id="mutex"><a class="header" href="#mutex">Mutex</a></h2>
-<p>事實上，剛剛說的 Locker 是基於 Mutex 實現的，只不過，Mutex 提供了查詢 Mutex 的 key 的信息的功能。測試代碼也類似：</p>
+<p>事實上，剛剛說的 Locker 是基於 Mutex 實作的，只不過，Mutex 提供了查詢 Mutex 的 key 的資訊的功能。測試程式碼也類似：</p>
 <pre><code class="language-go">func useMutex(cli *clientv3.Client) {
     // 為鎖生成session
     s1, err := concurrency.NewSession(cli)
@@ -448,10 +463,10 @@ func useLock(cli *clientv3.Client) {
     log.Println("released lock")
 }
 </code></pre>
-<p>可以看到，Mutex 並沒有實現 sync.Locker 接口，它的 Lock/Unlock 方法需要提供一個 context.Context 實例做參數，這也就意味著，在請求鎖的時候，你可以設置超時時間，或者主動取消請求。</p>
+<p>可以看到，Mutex 並沒有實作 sync.Locker 介面，它的 Lock/Unlock 方法需要提供一個 context.Context 例項做引數，這也就意味著，在請求鎖的時候，你可以設定超時時間，或者主動取消請求。</p>
 <h1 id="讀寫鎖"><a class="header" href="#讀寫鎖">讀寫鎖</a></h1>
-<p>學完了分佈式 Locker 和互斥鎖 Mutex，你肯定會聯想到讀寫鎖 RWMutex。是的，etcd 也提供了分佈式的讀寫鎖。不過，互斥鎖 Mutex 是在 github.com/coreos/etcd/clientv3/concurrency 包中提供的，讀寫鎖 RWMutex 卻是在 github.com/coreos/etcd/contrib/recipes 包中提供的。</p>
-<p>etcd 提供的分佈式讀寫鎖的功能和標準庫的讀寫鎖的功能是一樣的。只不過，<strong>etcd 提供的讀寫鎖，可以在分佈式環境中的不同的節點使用</strong>。它提供的方法也和標準庫中的讀寫鎖的方法一致，分別提供了 RLock/RUnlock、Lock/Unlock 方法。下面的代碼是使用讀寫鎖的例子，它從命令行中讀取命令，執行讀寫鎖的操作：</p>
+<p>學完了分散式 Locker 和互斥鎖 Mutex，你肯定會聯想到讀寫鎖 RWMutex。是的，etcd 也提供了分散式的讀寫鎖。不過，互斥鎖 Mutex 是在 github.com/coreos/etcd/clientv3/concurrency 包中提供的，讀寫鎖 RWMutex 卻是在 github.com/coreos/etcd/contrib/recipes 包中提供的。</p>
+<p>etcd 提供的分散式讀寫鎖的功能和標準庫的讀寫鎖的功能是一樣的。只不過，<strong>etcd 提供的讀寫鎖，可以在分散式環境中的不同的節點使用</strong>。它提供的方法也和標準庫中的讀寫鎖的方法一致，分別提供了 RLock/RUnlock、Lock/Unlock 方法。下面的程式碼是使用讀寫鎖的例子，它從命令列中讀取命令，執行讀寫鎖的操作：</p>
 <pre><code class="language-go">package main
 
 import (
@@ -482,13 +497,13 @@ func main() {
     // 解析etcd地址
     endpoints := strings.Split(*addr, ",")
 
-    // 創建etcd的client
+    // 建立etcd的client
     cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints})
     if err != nil {
         log.Fatal(err)
     }
     defer cli.Close()
-    // 創建session
+    // 建立session
     s1, err := concurrency.NewSession(cli)
     if err != nil {
         log.Fatal(err)
@@ -496,7 +511,7 @@ func main() {
     defer s1.Close()
     m1 := recipe.NewRWMutex(s1, *lockName)
 
-    // 從命令行讀取命令
+    // 從命令列讀取命令
     consolescanner := bufio.NewScanner(os.Stdin)
     for consolescanner.Scan() {
         action := consolescanner.Text()
@@ -545,15 +560,15 @@ func testReadLocker(m1 *recipe.RWMutex) {
         log.Fatal(err)
     }
     log.Println("released read lock")
-}總結自己實現分佈式環境的併發原語，是相當困難的一件事，因為你需要考慮網絡的延遲和異常、節點的可用性、數據的一致性等多種情況。
+}總結自己實作分散式環境的併發原語，是相當困難的一件事，因為你需要考慮網路的延遲和異常、節點的可用性、資料的一致性等多種情況。
 </code></pre>
-<p>所以，我們可以藉助 etcd 這樣成熟的框架，基於它提供的分佈式併發原語處理分佈式的場景。需要注意的是，在使用這些分佈式併發原語的時候，你需要考慮異常的情況，比如網絡斷掉等。同時，分佈式併發原語需要網絡之間的通訊，所以會比使用標準庫中的併發原語耗時更長。</p>
+<p>所以，我們可以藉助 etcd 這樣成熟的框架，基於它提供的分散式併發原語處理分散式的場景。需要注意的是，在使用這些分散式併發原語的時候，你需要考慮異常的情況，比如網路斷掉等。同時，分散式併發原語需要網路之間的通訊，所以會比使用標準庫中的併發原語耗時更長。</p>
 <p><img src="./images/4753e1be1e0cec80cea39fcd6954a3a4.png" alt="" /></p>
-<p>好了，這節課就到這裡，下節課，我會帶你繼續學習其它的分佈式併發原語，包括隊列、柵欄和 STM，敬請期待。</p>
+<p>好了，這節課就到這裡，下節課，我會帶你繼續學習其它的分散式併發原語，包括佇列、柵欄和 STM，敬請期待。</p>
 <h1 id="思考題"><a class="header" href="#思考題">思考題</a></h1>
 <ol>
 <li>如果持有互斥鎖或者讀寫鎖的節點意外宕機了，它持有的鎖會不會被釋放？</li>
-<li>etcd 提供的讀寫鎖中的讀和寫有沒有優先級？</li>
+<li>etcd 提供的讀寫鎖中的讀和寫有沒有優先順序？</li>
 </ol>
 <p>歡迎在留言區寫下你的思考和答案，我們一起交流討論。如果你覺得有所收穫，也歡迎你把今天的內容分享給你的朋友或同事。</p>
 

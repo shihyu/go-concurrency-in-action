@@ -175,32 +175,45 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="17--singleflight-和-cyclicbarrier請求合併和循環柵欄該怎麼用"><a class="header" href="#17--singleflight-和-cyclicbarrier請求合併和循環柵欄該怎麼用">17 | SingleFlight 和 CyclicBarrier：請求合併和循環柵欄該怎麼用？</a></h1>
+                        <h1 id="17singleflight-和-cyclicbarrier請求合併和迴圈柵欄該怎麼用"><a class="header" href="#17singleflight-和-cyclicbarrier請求合併和迴圈柵欄該怎麼用">17｜SingleFlight 和 CyclicBarrier：請求合併和迴圈柵欄該怎麼用？</a></h1>
 <p>你好，我是鳥窩。</p>
-<p>這節課，我來給你介紹兩個非常重要的擴展併發原語：SingleFlight 和 CyclicBarrier。SingleFlight 的作用是將併發請求合併成一個請求，以減少對下層服務的壓力；而 CyclicBarrier 是一個可重用的柵欄併發原語，用來控制一組請求同時執行的數據結構。</p>
+<h2 id="本章導讀"><a class="header" href="#本章導讀">本章導讀</a></h2>
+<pre><code class="language-text">        SingleFlight + CyclicBarrier（兩種不同用途）
+
+A. SingleFlight（請求合併）
+請求A ─┐
+請求B ─┼──&gt; [同一 key] -&gt; 只執行 1 次 -&gt; 結果廣播給等待者
+請求C ─┘
+
+B. CyclicBarrier（分批同步）
+worker1 ─┐
+worker2 ─┼──&gt; [barrier 點] -&gt; 全員到齊 -&gt; 一起往下執行（可重複使用）
+worker3 ─┘
+</code></pre>
+<p>這節課，我來給你介紹兩個非常重要的擴充套件併發原語：SingleFlight 和 CyclicBarrier。SingleFlight 的作用是將併發請求合併成一個請求，以減少對下層服務的壓力；而 CyclicBarrier 是一個可重用的柵欄併發原語，用來控制一組請求同時執行的資料結構。</p>
 <p>其實，它們兩個並沒有直接的關係，只是內容相對來說比較少，所以我打算用最短的時間帶你掌握它們。一節課就能掌握兩個“武器”，是不是很高效？</p>
 <h1 id="請求合併-singleflight"><a class="header" href="#請求合併-singleflight">請求合併 SingleFlight</a></h1>
-<p>SingleFlight 是 Go 開發組提供的一個擴展併發原語。它的作用是，在處理多個 goroutine 同時調用同一個函數的時候，只讓一個 goroutine 去調用這個函數，等到這個 goroutine 返回結果的時候，再把結果返回給這幾個同時調用的 goroutine，這樣可以減少併發調用的數量。</p>
-<p>這裡我想先回答一個問題：標準庫中的 sync.Once 也可以保證併發的 goroutine 只會執行一次函數 f，那麼，SingleFlight 和 sync.Once 有什麼區別呢？</p>
-<p>其實，sync.Once 不是隻在併發的時候保證只有一個 goroutine 執行函數 f，而是會保證永遠只執行一次，而 SingleFlight 是每次調用都重新執行，並且在多個請求同時調用的時候只有一個執行。它們兩個面對的場景是不同的，<strong>sync.Once 主要是用在單次初始化場景中，而 SingleFlight 主要用在合併併發請求的場景中</strong>，尤其是緩存場景。</p>
-<p>如果你學會了 SingleFlight，在面對秒殺等大併發請求的場景，而且這些請求都是讀請求時，你就可以把這些請求合併為一個請求，這樣，你就可以將後端服務的壓力從 n 降到 1。尤其是在面對後端是數據庫這樣的服務的時候，採用 SingleFlight 可以極大地提高性能。那麼，話不多說，就讓我們開始學習 SingleFlight 吧。</p>
-<h2 id="實現原理"><a class="header" href="#實現原理">實現原理</a></h2>
-<p>SingleFlight 使用互斥鎖 Mutex 和 Map 來實現。Mutex 提供併發時的讀寫保護，Map 用來保存同一個 key 的正在處理（in flight）的請求。</p>
-<p>SingleFlight 的數據結構是 Group，它提供了三個方法。</p>
+<p>SingleFlight 是 Go 開發組提供的一個擴充套件併發原語。它的作用是，在處理多個 goroutine 同時呼叫同一個函式的時候，只讓一個 goroutine 去呼叫這個函式，等到這個 goroutine 返回結果的時候，再把結果返回給這幾個同時呼叫的 goroutine，這樣可以減少併發呼叫的數量。</p>
+<p>這裡我想先回答一個問題：標準庫中的 sync.Once 也可以保證併發的 goroutine 只會執行一次函式 f，那麼，SingleFlight 和 sync.Once 有什麼區別呢？</p>
+<p>其實，sync.Once 不是隻在併發的時候保證只有一個 goroutine 執行函式 f，而是會保證永遠只執行一次，而 SingleFlight 是每次呼叫都重新執行，並且在多個請求同時呼叫的時候只有一個執行。它們兩個面對的場景是不同的，<strong>sync.Once 主要是用在單次初始化場景中，而 SingleFlight 主要用在合併併發請求的場景中</strong>，尤其是快取場景。</p>
+<p>如果你學會了 SingleFlight，在面對秒殺等大併發請求的場景，而且這些請求都是讀請求時，你就可以把這些請求合併為一個請求，這樣，你就可以將後端服務的壓力從 n 降到 1。尤其是在面對後端是資料庫這樣的服務的時候，採用 SingleFlight 可以極大地提高效能。那麼，話不多說，就讓我們開始學習 SingleFlight 吧。</p>
+<h2 id="實作原理"><a class="header" href="#實作原理">實作原理</a></h2>
+<p>SingleFlight 使用互斥鎖 Mutex 和 Map 來實作。Mutex 提供併發時的讀防寫，Map 用來儲存同一個 key 的正在處理（in flight）的請求。</p>
+<p>SingleFlight 的資料結構是 Group，它提供了三個方法。</p>
 <p><img src="./images/cdd7bf73b51660679f384cb98496085a.png" alt="" /></p>
 <ol>
-<li>Do：這個方法執行一個函數，並返回函數執行的結果。你需要提供一個 key，對於同一個 key，在同一時間只有一個在執行，同一個 key 併發的請求會等待。第一個執行的請求返回的結果，就是它的返回結果。函數 fn 是一個無參的函數，返回一個結果或者 error，而 Do 方法會返回函數執行的結果或者是 error，shared 會指示 v 是否返回給多個請求。</li>
-<li>DoChan：類似 Do 方法，只不過是返回一個 chan，等 fn 函數執行完，產生了結果以後，就能從這個 chan 中接收這個結果。</li>
-<li>Forget：告訴 Group 忘記這個 key。這樣一來，之後這個 key 請求會執行 f，而不是等待前一個未完成的 fn 函數的結果。</li>
+<li>Do：這個方法執行一個函式，並返回函式執行的結果。你需要提供一個 key，對於同一個 key，在同一時間只有一個在執行，同一個 key 併發的請求會等待。第一個執行的請求返回的結果，就是它的返回結果。函式 fn 是一個無參的函式，返回一個結果或者 error，而 Do 方法會返回函式執行的結果或者是 error，shared 會指示 v 是否返回給多個請求。</li>
+<li>DoChan：類似 Do 方法，只不過是返回一個 chan，等 fn 函式執行完，產生了結果以後，就能從這個 chan 中接收這個結果。</li>
+<li>Forget：告訴 Group 忘記這個 key。這樣一來，之後這個 key 請求會執行 f，而不是等待前一個未完成的 fn 函式的結果。</li>
 </ol>
-<p>下面，我們來看具體的實現方法。</p>
-<p>首先，SingleFlight 定義一個輔助對象 call，這個 call 就代表正在執行 fn 函數的請求或者是已經執行完的請求。Group 代表 SingleFlight。</p>
+<p>下面，我們來看具體的實作方法。</p>
+<p>首先，SingleFlight 定義一個輔助物件 call，這個 call 就代表正在執行 fn 函式的請求或者是已經執行完的請求。Group 代表 SingleFlight。</p>
 <pre><code class="language-go">  // 代表一個正在處理的請求，或者已經處理完的請求
   type call struct {
     wg sync.WaitGroup
   
 
-    // 這個字段代表處理完的值，在waitgroup完成之前只會寫一次
+    // 這個欄位代表處理完的值，在waitgroup完成之前只會寫一次
         // waitgroup完成之後就讀取這個值
     val interface{}
     err error
@@ -211,13 +224,13 @@
     chans []chan&lt;- Result
   }
   
-    // group代表一個singleflight對象
+    // group代表一個singleflight物件
   type Group struct {
     mu sync.Mutex       // protects m
     m  map[string]*call // lazily initialized
   }
 </code></pre>
-<p>我們只需要查看一個 Do 方法，DoChan 的處理方法是類似的。</p>
+<p>我們只需要檢視一個 Do 方法，DoChan 的處理方法是類似的。</p>
 <pre><code class="language-go">  func (g *Group) Do(key string, fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
     g.mu.Lock()
     if g.m == nil {
@@ -229,24 +242,24 @@
       c.wg.Wait() //等待這個key的第一個請求完成
       return c.val, c.err, true //使用第一個key的請求結果
     }
-    c := new(call) // 第一個請求，創建一個call
+    c := new(call) // 第一個請求，建立一個call
     c.wg.Add(1)
     g.m[key] = c //加入到key map中
     g.mu.Unlock()
   
 
-    g.doCall(c, key, fn) // 調用方法
+    g.doCall(c, key, fn) // 呼叫方法
     return c.val, c.err, c.dups &gt; 0
   }
 </code></pre>
-<p>doCall 方法會實際調用函數 fn：</p>
+<p>doCall 方法會實際呼叫函式 fn：</p>
 <pre><code class="language-go">  func (g *Group) doCall(c *call, key string, fn func() (interface{}, error)) {
     c.val, c.err = fn()
     c.wg.Done()
   
 
     g.mu.Lock()
-    if !c.forgotten { // 已調用完，刪除這個key
+    if !c.forgotten { // 已呼叫完，刪除這個key
       delete(g.m, key)
     }
     for _, ch := range c.chans {
@@ -255,20 +268,20 @@
     g.mu.Unlock()
   }
 </code></pre>
-<p>在這段代碼中，你要注意下第 7 行。在默認情況下，forgotten==false，所以第 8 行默認會被調用，也就是說，第一個請求完成後，後續的同一個 key 的請求又重新開始新一次的 fn 函數的調用。</p>
-<p>Go 標準庫的代碼中就有一個 SingleFlight 的實現，而擴展庫中的 SingleFlight 就是在標準庫的代碼基礎上改的，邏輯幾乎一模一樣，我就不多說了。</p>
+<p>在這段程式碼中，你要注意下第 7 行。在預設情況下，forgotten==false，所以第 8 行預設會被呼叫，也就是說，第一個請求完成後，後續的同一個 key 的請求又重新開始新一次的 fn 函式的呼叫。</p>
+<p>Go 標準庫的程式碼中就有一個 SingleFlight 的實作，而擴充套件庫中的 SingleFlight 就是在標準庫的程式碼基礎上改的，邏輯幾乎一模一樣，我就不多說了。</p>
 <h2 id="應用場景"><a class="header" href="#應用場景">應用場景</a></h2>
-<p>瞭解了 SingleFlight 的實現原理，下面我們來看看它都應用於什麼場景中。</p>
-<p>Go 代碼庫中有兩個地方用到了 SingleFlight。</p>
+<p>瞭解了 SingleFlight 的實作原理，下面我們來看看它都應用於什麼場景中。</p>
+<p>Go 程式碼庫中有兩個地方用到了 SingleFlight。</p>
 <p>第一個是在net/lookup.go中，如果同時有查詢同一個 host 的請求，lookupGroup 會把這些請求 merge 到一起，只需要一個請求就可以了：</p>
 <pre><code class="language-go">// lookupGroup merges LookupIPAddr calls together for lookups for the same
 // host. The lookupGroup key is the LookupIPAddr.host argument.
 // The return values are ([]IPAddr, error).
 lookupGroup singleflight.Group
 </code></pre>
-<p>第二個是 Go 在查詢倉庫版本信息時，將併發的請求合併成 1 個請求：</p>
+<p>第二個是 Go 在查詢倉庫版本資訊時，將併發的請求合併成 1 個請求：</p>
 <pre><code class="language-go">func metaImportsForPrefix(importPrefix string, mod ModuleMode, security web.SecurityMode) (*urlpkg.URL, []metaImport, error) {
-        // 使用緩存保存請求結果
+        // 使用快取儲存請求結果
     setCache := func(res fetchResult) (fetchResult, error) {
       fetchCacheMu.Lock()
       defer fetchCacheMu.Unlock()
@@ -278,7 +291,7 @@ lookupGroup singleflight.Group
         // 使用 SingleFlight請求
     resi, _, _ := fetchGroup.Do(importPrefix, func() (resi interface{}, err error) {
       fetchCacheMu.Lock()
-            // 如果緩存中有數據，那麼直接從緩存中取
+            // 如果快取中有資料，那麼直接從快取中取
       if res, ok := fetchCache[importPrefix]; ok {
         fetchCacheMu.Unlock()
         return res, nil
@@ -286,14 +299,14 @@ lookupGroup singleflight.Group
       fetchCacheMu.Unlock()
             ......
 </code></pre>
-<p>需要注意的是，這裡涉及到了緩存的問題。上面的代碼會把結果放在緩存中，這也是常用的一種解決緩存擊穿的例子。</p>
-<p>設計緩存問題時，我們常常需要解決緩存穿透、緩存雪崩和緩存擊穿問題。緩存擊穿問題是指，在平常高併發的系統中，大量的請求同時查詢一個 key 時，如果這個 key 正好過期失效了，就會導致大量的請求都打到數據庫上。這就是緩存擊穿。</p>
-<p>用 SingleFlight 來解決緩存擊穿問題再合適不過了。因為，這個時候，只要這些對同一個 key 的併發請求的其中一個到數據庫中查詢，就可以了，這些併發的請求可以共享同一個結果。因為是緩存查詢，不用考慮冪等性問題。</p>
-<p>事實上，在 Go 生態圈知名的緩存框架 groupcache 中，就使用了較早的 Go 標準庫的 SingleFlight 實現。接下來，我就來給你介紹一下 groupcache 是如何使用 SingleFlight 解決緩存擊穿問題的。</p>
+<p>需要注意的是，這裡涉及到了快取的問題。上面的程式碼會把結果放在快取中，這也是常用的一種解決快取擊穿的例子。</p>
+<p>設計快取問題時，我們常常需要解決快取穿透、快取雪崩和快取擊穿問題。快取擊穿問題是指，在平常高併發的系統中，大量的請求同時查詢一個 key 時，如果這個 key 正好過期失效了，就會導致大量的請求都打到資料庫上。這就是快取擊穿。</p>
+<p>用 SingleFlight 來解決快取擊穿問題再合適不過了。因為，這個時候，只要這些對同一個 key 的併發請求的其中一個到資料庫中查詢，就可以了，這些併發的請求可以共享同一個結果。因為是快取查詢，不用考慮冪等性問題。</p>
+<p>事實上，在 Go 生態圈知名的快取框架 groupcache 中，就使用了較早的 Go 標準庫的 SingleFlight 實作。接下來，我就來給你介紹一下 groupcache 是如何使用 SingleFlight 解決快取擊穿問題的。</p>
 <p>groupcache 中的 SingleFlight 只有一個方法：</p>
 <pre><code class="language-go">func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, error)
 </code></pre>
-<p>SingleFlight 的作用是，在加載一個緩存項的時候，合併對同一個 key 的 load 的併發請求：</p>
+<p>SingleFlight 的作用是，在載入一個快取項的時候，合併對同一個 key 的 load 的併發請求：</p>
 <pre><code class="language-go">  type Group struct {
     。。。。。。
     // loadGroup ensures that each key is only fetched once
@@ -314,34 +327,34 @@ lookupGroup singleflight.Group
     return
   }
 </code></pre>
-<p>其它的知名項目如 Cockroachdb（小強數據庫）、CoreDNS（DNS 服務器）等都有 SingleFlight 應用，你可以查看這些項目的代碼，加深對 SingleFlight 的理解。</p>
-<p>總結來說，使用 SingleFlight 時，可以通過合併請求的方式降低對下游服務的併發壓力，從而提高系統的性能，常常用於緩存系統中。最後，我想給你留一個思考題，你覺得，SingleFlight 能不能合併併發的寫操作呢？</p>
-<h1 id="循環柵欄-cyclicbarrier"><a class="header" href="#循環柵欄-cyclicbarrier">循環柵欄 CyclicBarrier</a></h1>
-<p>接下來，我再給你介紹另外一個併發原語：循環柵欄（CyclicBarrier），它常常應用於重複進行一組 goroutine 同時執行的場景中。</p>
-<p>CyclicBarrier允許一組 goroutine 彼此等待，到達一個共同的執行點。同時，因為它可以被重複使用，所以叫循環柵欄。具體的機制是，大家都在柵欄前等待，等全部都到齊了，就抬起柵欄放行。</p>
-<p>事實上，這個 CyclicBarrier 是參考Java CyclicBarrier和C# Barrier的功能實現的。Java 提供了 CountDownLatch（倒計時器）和 CyclicBarrier（循環柵欄）兩個類似的用於保證多線程到達同一個執行點的類，只不過前者是到達 0 的時候放行，後者是到達某個指定的數的時候放行。C# Barrier 功能也是類似的，你可以查看鏈接，瞭解它的具體用法。</p>
+<p>其它的知名專案如 Cockroachdb（小強資料庫）、CoreDNS（DNS 伺服器）等都有 SingleFlight 應用，你可以檢視這些專案的程式碼，加深對 SingleFlight 的理解。</p>
+<p>總結來說，使用 SingleFlight 時，可以透過合併請求的方式降低對下游服務的併發壓力，從而提高系統的效能，常常用於快取系統中。最後，我想給你留一個思考題，你覺得，SingleFlight 能不能合併併發的寫操作呢？</p>
+<h1 id="迴圈柵欄-cyclicbarrier"><a class="header" href="#迴圈柵欄-cyclicbarrier">迴圈柵欄 CyclicBarrier</a></h1>
+<p>接下來，我再給你介紹另外一個併發原語：迴圈柵欄（CyclicBarrier），它常常應用於重複進行一組 goroutine 同時執行的場景中。</p>
+<p>CyclicBarrier允許一組 goroutine 彼此等待，到達一個共同的執行點。同時，因為它可以被重複使用，所以叫迴圈柵欄。具體的機制是，大家都在柵欄前等待，等全部都到齊了，就抬起柵欄放行。</p>
+<p>事實上，這個 CyclicBarrier 是參考Java CyclicBarrier和C# Barrier的功能實作的。Java 提供了 CountDownLatch（倒計時器）和 CyclicBarrier（迴圈柵欄）兩個類似的用於保證多執行緒到達同一個執行點的類，只不過前者是到達 0 的時候放行，後者是到達某個指定的數的時候放行。C# Barrier 功能也是類似的，你可以檢視連結，瞭解它的具體用法。</p>
 <p>你可能會覺得，CyclicBarrier 和 WaitGroup 的功能有點類似，確實是這樣。不過，CyclicBarrier 更適合用在“固定數量的 goroutine 等待同一個執行點”的場景中，而且在放行 goroutine 之後，CyclicBarrier 可以重複利用，不像 WaitGroup 重用的時候，必須小心翼翼避免 panic。</p>
-<p>處理可重用的多 goroutine 等待同一個執行點的場景的時候，CyclicBarrier 和 WaitGroup 方法調用的對應關係如下：</p>
+<p>處理可重用的多 goroutine 等待同一個執行點的場景的時候，CyclicBarrier 和 WaitGroup 方法呼叫的對應關係如下：</p>
 <p><img src="./images/eb64d08859a2e0de8bd8aa29614e5657.png" alt="" /></p>
-<p>可以看到，如果使用 WaitGroup 實現的話，調用比較複雜，不像 CyclicBarrier 那麼清爽。更重要的是，如果想重用 WaitGroup，你還要保證，將 WaitGroup 的計數值重置到 n 的時候不會出現併發問題。</p>
+<p>可以看到，如果使用 WaitGroup 實作的話，呼叫比較複雜，不像 CyclicBarrier 那麼清爽。更重要的是，如果想重用 WaitGroup，你還要保證，將 WaitGroup 的計數值重置到 n 的時候不會出現併發問題。</p>
 <p>WaitGroup 更適合用在“一個 goroutine 等待一組 goroutine 到達同一個執行點”的場景中，或者是不需要重用的場景中。</p>
-<p>好了，瞭解了 CyclicBarrier 的應用場景和功能，下面我們來學習下它的具體實現。</p>
-<h2 id="實現原理-1"><a class="header" href="#實現原理-1">實現原理</a></h2>
+<p>好了，瞭解了 CyclicBarrier 的應用場景和功能，下面我們來學習下它的具體實作。</p>
+<h2 id="實作原理-1"><a class="header" href="#實作原理-1">實作原理</a></h2>
 <p>CyclicBarrier 有兩個初始化方法：</p>
 <ol>
-<li>第一個是 New 方法，它只需要一個參數，來指定循環柵欄參與者的數量；</li>
-<li>第二個方法是 NewWithAction，它額外提供一個函數，可以在每一次到達執行點的時候執行一次。具體的時間點是在最後一個參與者到達之後，但是其它的參與者還未被放行之前。我們可以利用它，做放行之前的一些共享狀態的更新等操作。</li>
+<li>第一個是 New 方法，它只需要一個引數，來指定迴圈柵欄參與者的數量；</li>
+<li>第二個方法是 NewWithAction，它額外提供一個函式，可以在每一次到達執行點的時候執行一次。具體的時間點是在最後一個參與者到達之後，但是其它的參與者還未被放行之前。我們可以利用它，做放行之前的一些共享狀態的更新等操作。</li>
 </ol>
 <p>這兩個方法的簽名如下：</p>
 <pre><code class="language-go">func New(parties int) CyclicBarrier
 func NewWithAction(parties int, barrierAction func() error) CyclicBarrier
 </code></pre>
-<p>CyclicBarrier 是一個接口，定義的方法如下：</p>
+<p>CyclicBarrier 是一個介面，定義的方法如下：</p>
 <pre><code class="language-go">type CyclicBarrier interface {
     // 等待所有的參與者到達，如果被ctx.Done()中斷，會返回ErrBrokenBarrier
     Await(ctx context.Context) error
 
-    // 重置循環柵欄到初始化狀態。如果當前有等待者，那麼它們會返回ErrBrokenBarrier
+    // 重置迴圈柵欄到初始化狀態。如果當前有等待者，那麼它們會返回ErrBrokenBarrier
     Reset()
 
     // 返回當前等待者的數量
@@ -350,12 +363,12 @@ func NewWithAction(parties int, barrierAction func() error) CyclicBarrier
     // 參與者的數量
     GetParties() int
 
-    // 循環柵欄是否處於中斷狀態
+    // 迴圈柵欄是否處於中斷狀態
     IsBroken() bool
 }
 </code></pre>
-<p>循環柵欄的使用也很簡單。循環柵欄的參與者只需調用 Await 等待，等所有的參與者都到達後，再執行下一步。當執行下一步的時候，循環柵欄的狀態又恢復到初始的狀態了，可以迎接下一輪同樣多的參與者。</p>
-<p>有一道非常經典的併發編程的題目，非常適合使用循環柵欄，下面我們來看一下。</p>
+<p>迴圈柵欄的使用也很簡單。迴圈柵欄的參與者只需呼叫 Await 等待，等所有的參與者都到達後，再執行下一步。當執行下一步的時候，迴圈柵欄的狀態又恢復到初始的狀態了，可以迎接下一輪同樣多的參與者。</p>
+<p>有一道非常經典的併發程式設計的題目，非常適合使用迴圈柵欄，下面我們來看一下。</p>
 <h2 id="併發趣題一氧化二氫製造工廠"><a class="header" href="#併發趣題一氧化二氫製造工廠">併發趣題：一氧化二氫製造工廠</a></h2>
 <p>題目是這樣的：</p>
 <blockquote>
@@ -365,30 +378,30 @@ func NewWithAction(parties int, barrierAction func() error) CyclicBarrier
 <p>這個工廠有多條生產線，每條生產線負責生產氧原子或者是氫原子，每條生產線由一個 goroutine 負責。</p>
 </blockquote>
 <blockquote>
-<p>這些生產線會通過一個柵欄，只有一個氧原子生產線和兩個氫原子生產線都準備好，才能生成出一個水分子，否則所有的生產線都會處於等待狀態。也就是說，一個水分子必須由三個不同的生產線提供原子，而且水分子是一個一個按照順序產生的，每生產一個水分子，就會打印出 HHO、HOH、OHH 三種形式的其中一種。HHH、OOH、OHO、HOO、OOO 都是不允許的。</p>
+<p>這些生產線會透過一個柵欄，只有一個氧原子生產線和兩個氫原子生產線都準備好，才能生成出一個水分子，否則所有的生產線都會處於等待狀態。也就是說，一個水分子必須由三個不同的生產線提供原子，而且水分子是一個一個按照順序產生的，每生產一個水分子，就會打印出 HHO、HOH、OHH 三種形式的其中一種。HHH、OOH、OHO、HOO、OOO 都是不允許的。</p>
 </blockquote>
 <blockquote>
 <p>生產線中氫原子的生產線為 2N 條，氧原子的生產線為 N 條。</p>
 </blockquote>
-<p>你可以先想一下，我們怎麼來實現呢？</p>
-<p>首先，我們來定義一個 H2O 輔助數據類型，它包含兩個信號量的字段和一個循環柵欄。</p>
+<p>你可以先想一下，我們怎麼來實作呢？</p>
+<p>首先，我們來定義一個 H2O 輔助資料型別，它包含兩個訊號量的欄位和一個迴圈柵欄。</p>
 <ol>
-<li>semaH 信號量：控制氫原子。一個水分子需要兩個氫原子，所以，氫原子的空槽數資源數設置為 2。</li>
-<li>semaO 信號量：控制氧原子。一個水分子需要一個氧原子，所以資源數的空槽數設置為 1。</li>
-<li>循環柵欄：等待兩個氫原子和一個氧原子填補空槽，直到任務完成。</li>
+<li>semaH 訊號量：控制氫原子。一個水分子需要兩個氫原子，所以，氫原子的空槽數資源數設定為 2。</li>
+<li>semaO 訊號量：控制氧原子。一個水分子需要一個氧原子，所以資源數的空槽數設定為 1。</li>
+<li>迴圈柵欄：等待兩個氫原子和一個氧原子填補空槽，直到任務完成。</li>
 </ol>
-<p>我們來看下具體的代碼：</p>
+<p>我們來看下具體的程式碼：</p>
 <pre><code class="language-go">package water
 import (
   "context"
   "github.com/marusama/cyclicbarrier"
   "golang.org/x/sync/semaphore"
 )
-// 定義水分子合成的輔助數據結構
+// 定義水分子合成的輔助資料結構
 type H2O struct {
-  semaH *semaphore.Weighted // 氫原子的信號量
-  semaO *semaphore.Weighted // 氧原子的信號量
-  b     cyclicbarrier.CyclicBarrier // 循環柵欄，用來控制合成
+  semaH *semaphore.Weighted // 氫原子的訊號量
+  semaO *semaphore.Weighted // 氧原子的訊號量
+  b     cyclicbarrier.CyclicBarrier // 迴圈柵欄，用來控制合成
 }
 func New() *H2O {
   return &amp;H2O{
@@ -399,7 +412,7 @@ func New() *H2O {
 }
 </code></pre>
 <p>接下來，我們看看各條流水線的處理情況。</p>
-<p>流水線分為氫原子處理流水線和氧原子處理流水線，首先，我們先看一下氫原子的流水線：如果有可用的空槽，氫原子的流水線的處理方法是 hydrogen，hydrogen 方法就會佔用一個空槽（h2o.semaH.Acquire），輸出一個 H 字符，然後等待柵欄放行。等其它的 goroutine 填補了氫原子的另一個空槽和氧原子的空槽之後，程序才可以繼續進行。</p>
+<p>流水線分為氫原子處理流水線和氧原子處理流水線，首先，我們先看一下氫原子的流水線：如果有可用的空槽，氫原子的流水線的處理方法是 hydrogen，hydrogen 方法就會佔用一個空槽（h2o.semaH.Acquire），輸出一個 H 字元，然後等待柵欄放行。等其它的 goroutine 填補了氫原子的另一個空槽和氧原子的空槽之後，程式才可以繼續進行。</p>
 <pre><code class="language-go">func (h2o *H2O) hydrogen(releaseHydrogen func()) {
   h2o.semaH.Acquire(context.Background(), 1)
 
@@ -418,7 +431,7 @@ func New() *H2O {
 }
 </code></pre>
 <p>在柵欄放行之前，只有兩個氫原子的空槽位和一個氧原子的空槽位。只有等柵欄放行之後，這些空槽位才會被釋放。柵欄放行，就意味著一個水分子組成成功。</p>
-<p>這個算法是不是正確呢？我們來編寫一個單元測試檢測一下。</p>
+<p>這個演算法是不是正確呢？我們來編寫一個單元測試檢測一下。</p>
 <pre><code class="language-go">package water
 
 import (
@@ -489,11 +502,11 @@ func TestWaterFactory(t *testing.T) {
     }
 }總結每一個併發原語都有它存在的道理，也都有它應用的場景。
 </code></pre>
-<p>如果你沒有學習 CyclicBarrier，你可能只會想到，用 WaitGroup 來實現這個水分子製造工廠的例子。</p>
+<p>如果你沒有學習 CyclicBarrier，你可能只會想到，用 WaitGroup 來實作這個水分子製造工廠的例子。</p>
 <pre><code class="language-go">type H2O struct {
     semaH *semaphore.Weighted
     semaO *semaphore.Weighted
-    wg    sync.WaitGroup //將循環柵欄替換成WaitGroup
+    wg    sync.WaitGroup //將迴圈柵欄替換成WaitGroup
 }
 
 func New() *H2O {
@@ -531,11 +544,11 @@ func (h2o *H2O) oxygen(releaseOxygen func()) {
     h2o.semaO.Release(1)
 }
 </code></pre>
-<p>你一看代碼就知道了，使用 WaitGroup 非常複雜，而且，重用和 Done 方法的調用有併發的問題，程序可能 panic，遠遠沒有使用循環柵欄更加簡單直接。</p>
-<p>所以，我建議你多瞭解一些併發原語，甚至是從其它編程語言、操作系統中學習更多的併發原語，這樣可以讓你的知識庫更加豐富，在面對併發場景的時候，你也能更加遊刃有餘。</p>
+<p>你一看程式碼就知道了，使用 WaitGroup 非常複雜，而且，重用和 Done 方法的呼叫有併發的問題，程式可能 panic，遠遠沒有使用迴圈柵欄更加簡單直接。</p>
+<p>所以，我建議你多瞭解一些併發原語，甚至是從其它程式語言、作業系統中學習更多的併發原語，這樣可以讓你的知識庫更加豐富，在面對併發場景的時候，你也能更加遊刃有餘。</p>
 <p><img src="./images/d1420380bee41ec733294e9b730683dc.png" alt="" /></p>
 <h1 id="思考題"><a class="header" href="#思考題">思考題</a></h1>
-<p>如果大自然的搬運工工廠生產的液體是雙氧水（雙氧水分子是兩個氫原子和兩個氧原子），你又該怎麼實現呢？</p>
+<p>如果大自然的搬運工工廠生產的液體是雙氧水（雙氧水分子是兩個氫原子和兩個氧原子），你又該怎麼實作呢？</p>
 <p>歡迎在留言區寫下你的思考和答案，我們一起交流討論。如果你覺得有所收穫，也歡迎你把今天的內容分享給你的朋友或同事。</p>
 
                     </main>
