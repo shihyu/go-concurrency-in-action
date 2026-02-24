@@ -1,0 +1,547 @@
+<!DOCTYPE HTML>
+<html lang="zh-TW" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>03｜Mutex：4種易錯場景大盤點 - Go 併發編程實戰課</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Go 併發編程實戰課</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="03mutex4種易錯場景大盤點"><a class="header" href="#03mutex4種易錯場景大盤點">03｜Mutex：4種易錯場景大盤點</a></h1>
+<p>你好，我是鳥窩。</p>
+<p>上一講，我帶你一起領略了 Mutex 的架構演進之美，現在我們已經清楚 Mutex 的實現細節了。當前 Mutex 的實現貌似非常複雜，其實主要還是針對飢餓模式和公平性問題，做了一些額外處理。但是，我們在第一講中已經體驗過了，Mutex 使用起來還是非常簡單的，畢竟，它只有 Lock 和 Unlock 兩個方法，使用起來還能複雜到哪裡去？</p>
+<p>正常使用 Mutex 時，確實是這樣的，很簡單，基本不會有什麼錯誤，即使出現錯誤，也是在一些複雜的場景中，比如跨函數調用 Mutex 或者是在重構或者修補 Bug 時誤操作。但是，我們使用 Mutex 時，確實會出現一些 Bug，比如說忘記釋放鎖、重入鎖、複製已使用了的 Mutex 等情況。那在這一講中，我們就一起來看看使用 Mutex 常犯的幾個錯誤，做到“Bug 提前知，後面早防範”。</p>
+<h1 id="常見的-4-種錯誤場景"><a class="header" href="#常見的-4-種錯誤場景">常見的 4 種錯誤場景</a></h1>
+<p>我總結了一下，使用 Mutex 常見的錯誤場景有 4 類，分別是 Lock/Unlock 不是成對出現、Copy 已使用的 Mutex、重入和死鎖。下面我們一一來看。</p>
+<h2 id="lockunlock-不是成對出現"><a class="header" href="#lockunlock-不是成對出現">Lock/Unlock 不是成對出現</a></h2>
+<p>Lock/Unlock 沒有成對出現，就意味著會出現死鎖的情況，或者是因為 Unlock 一個未加鎖的 Mutex 而導致 panic。</p>
+<p>我們先來看看缺少 Unlock 的場景，常見的有三種情況：</p>
+<ol>
+<li>代碼中有太多的 if-else 分支，可能在某個分支中漏寫了 Unlock；</li>
+<li>在重構的時候把 Unlock 給刪除了；</li>
+<li>Unlock 誤寫成了 Lock。</li>
+</ol>
+<p>在這種情況下，鎖被獲取之後，就不會被釋放了，這也就意味著，其它的 goroutine 永遠都沒機會獲取到鎖。</p>
+<p>我們再來看缺少 Lock 的場景，這就很簡單了，一般來說就是誤操作刪除了 Lock。 比如先前使用 Mutex 都是正常的，結果後來其他人重構代碼的時候，由於對代碼不熟悉，或者由於開發者的馬虎，把 Lock 調用給刪除了，或者註釋掉了。比如下面的代碼，mu.Lock() 一行代碼被刪除了，直接 Unlock 一個未加鎖的 Mutex 會 panic：</p>
+<pre><code>func foo() {
+    var mu sync.Mutex
+    defer mu.Unlock()
+    fmt.Println("hello world!")
+}
+</code></pre>
+<p>運行的時候 panic：</p>
+<p><img src="./images/1055f2ef64a6cd75eb4b96a6c10f4f68.png" alt="" /></p>
+<h2 id="copy-已使用的-mutex"><a class="header" href="#copy-已使用的-mutex">Copy 已使用的 Mutex</a></h2>
+<p>第二種誤用是 Copy 已使用的 Mutex。在正式分析這個錯誤之前，我先交代一個小知識點，那就是 Package sync 的同步原語在使用後是不能複製的。我們知道 Mutex 是最常用的一個同步原語，那它也是不能複製的。為什麼呢？</p>
+<p>原因在於，Mutex 是一個有狀態的對象，它的 state 字段記錄這個鎖的狀態。如果你要複製一個已經加鎖的 Mutex 給一個新的變量，那麼新的剛初始化的變量居然被加鎖了，這顯然不符合你的期望，因為你期望的是一個零值的 Mutex。關鍵是在併發環境下，你根本不知道要複製的 Mutex 狀態是什麼，因為要複製的 Mutex 是由其它 goroutine 併發訪問的，狀態可能總是在變化。</p>
+<p>當然，你可能說，你說的我都懂，你的警告我都記下了，但是實際在使用的時候，一不小心就踩了這個坑，我們來看一個例子。</p>
+<pre><code>type Counter struct {
+    sync.Mutex
+    Count int
+}
+
+func main() {
+    var c Counter
+    c.Lock()
+    defer c.Unlock()
+    c.Count++
+    foo(c) // 複製鎖
+}
+
+// 這裡Counter的參數是通過複製的方式傳入的
+func foo(c Counter) {
+    c.Lock()
+    defer c.Unlock()
+    fmt.Println("in foo")
+}
+</code></pre>
+<p>第 12 行在調用 foo 函數的時候，調用者會複製 Mutex 變量 c 作為 foo 函數的參數，不幸的是，複製之前已經使用了這個鎖，這就導致，複製的 Counter 是一個帶狀態 Counter。</p>
+<p>怎麼辦呢？Go 在運行時，有<strong>死鎖的檢查機制</strong>（checkdead() 方法），它能夠發現死鎖的 goroutine。這個例子中因為複製了一個使用了的 Mutex，導致鎖無法使用，程序處於死鎖的狀態。程序運行的時候，死鎖檢查機制能夠發現這種死鎖情況並輸出錯誤信息，如下圖中錯誤信息以及錯誤堆棧：</p>
+<p><img src="./images/26c5fec4c57c9dbe7c916dc2e4be8af4.png" alt="" /></p>
+<p>你肯定不想運行的時候才發現這個因為複製 Mutex 導致的死鎖問題，那麼你怎麼能夠及時發現問題呢？可以使用 <strong>vet 工具</strong>，把檢查寫在 Makefile 文件中，在持續集成的時候跑一跑，這樣可以及時發現問題，及時修復。我們可以使用 go vet 檢查這個 Go 文件：</p>
+<p><img src="./images/8755b5179ba235abc1f027aa2b2fdeb9.png" alt="" /></p>
+<p>你看，使用這個工具就可以發現 Mutex 複製的問題，錯誤信息顯示得很清楚，是在調用 foo 函數的時候發生了 lock value 複製的情況，還告訴我們出問題的代碼行數以及 copy lock 導致的錯誤。</p>
+<p>那麼，vet 工具是怎麼發現 Mutex 複製使用問題的呢？我帶你簡單分析一下。</p>
+<p>檢查是通過copylock分析器靜態分析實現的。這個分析器會分析函數調用、range 遍歷、複製、聲明、函數返回值等位置，有沒有鎖的值 copy 的情景，以此來判斷有沒有問題。可以說，只要是實現了 Locker 接口，就會被分析。我們看到，下面的代碼就是確定什麼類型會被分析，其實就是實現了 Lock/Unlock 兩個方法的 Locker 接口：</p>
+<pre><code>var lockerType *types.Interface
+  
+  // Construct a sync.Locker interface type.
+  func init() {
+    nullary := types.NewSignature(nil, nil, nil, false) // func()
+    methods := []*types.Func{
+      types.NewFunc(token.NoPos, nil, "Lock", nullary),
+      types.NewFunc(token.NoPos, nil, "Unlock", nullary),
+    }
+    lockerType = types.NewInterface(methods, nil).Complete()
+  }
+</code></pre>
+<p>其實，有些沒有實現 Locker 接口的同步原語（比如 WaitGroup），也能被分析。我先賣個關子，後面我們會介紹這種情況是怎麼實現的。</p>
+<h2 id="重入"><a class="header" href="#重入">重入</a></h2>
+<p>接下來，我們來討論“重入”這個問題。在說這個問題前，我先解釋一下個概念，叫“可重入鎖”。</p>
+<p>如果你學過 Java，可能會很熟悉 ReentrantLock，就是可重入鎖，這是 Java 併發包中非常常用的一個同步原語。它的基本行為和互斥鎖相同，但是加了一些擴展功能。</p>
+<p>如果你沒接觸過 Java，也沒關係，這裡只是提一下，幫助會 Java 的同學對比來學。那下面我來具體講解可重入鎖是咋回事兒。</p>
+<p>當一個線程獲取鎖時，如果沒有其它線程擁有這個鎖，那麼，這個線程就成功獲取到這個鎖。之後，如果其它線程再請求這個鎖，就會處於阻塞等待的狀態。但是，如果擁有這把鎖的線程再請求這把鎖的話，不會阻塞，而是成功返回，所以叫可重入鎖（有時候也叫做遞歸鎖）。只要你擁有這把鎖，你可以可著勁兒地調用，比如通過遞歸實現一些算法，調用者不會阻塞或者死鎖。</p>
+<p>瞭解了可重入鎖的概念，那我們來看 Mutex 使用的錯誤場景。劃重點了：<strong>Mutex 不是可重入的鎖。</strong></p>
+<p>想想也不奇怪，因為 Mutex 的實現中沒有記錄哪個 goroutine 擁有這把鎖。理論上，任何 goroutine 都可以隨意地 Unlock 這把鎖，所以沒辦法計算重入條件，畢竟，“臣妾做不到啊”！</p>
+<p>所以，一旦誤用 Mutex 的重入，就會導致報錯。下面是一個誤用 Mutex 的重入例子：</p>
+<pre><code>func foo(l sync.Locker) {
+    fmt.Println("in foo")
+    l.Lock()
+    bar(l)
+    l.Unlock()
+}
+
+func bar(l sync.Locker) {
+    l.Lock()
+    fmt.Println("in bar")
+    l.Unlock()
+}
+
+func main() {
+    l := &amp;sync.Mutex{}
+    foo(l)
+}
+</code></pre>
+<p>寫完這個 Mutex 重入的例子後，運行一下，你會發現類似下面的錯誤。程序一直在請求鎖，但是一直沒有辦法獲取到鎖，結果就是 Go 運行時發現死鎖了，沒有其它地方能夠釋放鎖讓程序運行下去，你通過下面的錯誤堆棧信息就能定位到哪一行阻塞請求鎖：</p>
+<p><img src="./images/b1d757af65406e95f39d47c57a71e056.png" alt="" /></p>
+<p>學到這裡，你可能要問了，雖然標準庫 Mutex 不是可重入鎖，但是如果我就是想要實現一個可重入鎖，可以嗎？</p>
+<p>可以，那我們就自己實現一個。這裡的關鍵就是，實現的鎖要能記住當前是哪個 goroutine 持有這個鎖。我來提供兩個方案。</p>
+<ol>
+<li>方案一：通過 hacker 的方式獲取到 goroutine id，記錄下獲取鎖的 goroutine id，它可以實現 Locker 接口。</li>
+<li>方案二：調用 Lock/Unlock 方法時，由 goroutine 提供一個 token，用來標識它自己，而不是我們通過 hacker 的方式獲取到 goroutine id，但是，這樣一來，就不滿足 Locker 接口了。</li>
+</ol>
+<p>可重入鎖（遞歸鎖）解決了代碼重入或者遞歸調用帶來的死鎖問題，同時它也帶來了另一個好處，就是我們可以要求，只有持有鎖的 goroutine 才能 unlock 這個鎖。這也很容易實現，因為在上面這兩個方案中，都已經記錄了是哪一個 goroutine 持有這個鎖。</p>
+<p>下面我們具體來看這兩個方案怎麼實現。</p>
+<p><strong>方案一</strong>：<strong>goroutine id</strong></p>
+<p>這個方案的關鍵第一步是獲取 goroutine id，方式有兩種，分別是簡單方式和 hacker 方式。</p>
+<p>簡單方式，就是通過 runtime.Stack 方法獲取棧幀信息，棧幀信息裡包含 goroutine id。你可以看看上面 panic 時候的貼圖，goroutine id 明明白白地顯示在那裡。runtime.Stack 方法可以獲取當前的 goroutine 信息，第二個參數為 true 會輸出所有的 goroutine 信息，信息的格式如下：</p>
+<pre><code>goroutine 1 [running]:
+main.main()
+        ....../main.go:19 +0xb1
+</code></pre>
+<p>第一行格式為 goroutine xxx，其中 xxx 就是 goroutine id，你只要解析出這個 id 即可。解析的方法可以採用下面的代碼：</p>
+<pre><code>func GoID() int {
+    var buf [64]byte
+    n := runtime.Stack(buf[:], false)
+    // 得到id字符串
+    idField := strings.Fields(strings.TrimPrefix(string(buf[:n]), "goroutine "))[0]
+    id, err := strconv.Atoi(idField)
+    if err != nil {
+        panic(fmt.Sprintf("cannot get goroutine id: %v", err))
+    }
+    return id
+}
+</code></pre>
+<p>瞭解了簡單方式，接下來我們來看 hacker 的方式，這也是我們方案一採取的方式。</p>
+<p>首先，我們獲取運行時的 g 指針，反解出對應的 g 的結構。每個運行的 goroutine 結構的 g 指針保存在當前 goroutine 的一個叫做 TLS 對象中。</p>
+<p>第一步：我們先獲取到 TLS 對象；</p>
+<p>第二步：再從 TLS 中獲取 goroutine 結構的 g 指針；</p>
+<p>第三步：再從 g 指針中取出 goroutine id。</p>
+<p>需要注意的是，不同 Go 版本的 goroutine 的結構可能不同，所以需要根據 Go 的不同版本進行調整。當然了，如果想要搞清楚各個版本的 goroutine 結構差異，所涉及的內容又過於底層而且複雜，學習成本太高。怎麼辦呢？我們可以重點關注一些庫。我們沒有必要重複發明輪子，直接使用第三方的庫來獲取 goroutine id 就可以了。</p>
+<p>好消息是現在已經有很多成熟的方法了，可以支持多個 Go 版本的 goroutine id，給你推薦一個常用的庫：petermattis/goid。</p>
+<p>知道了如何獲取 goroutine id，接下來就是最後的關鍵一步了，我們實現一個可以使用的可重入鎖：</p>
+<pre><code>// RecursiveMutex 包裝一個Mutex,實現可重入
+type RecursiveMutex struct {
+    sync.Mutex
+    owner     int64 // 當前持有鎖的goroutine id
+    recursion int32 // 這個goroutine 重入的次數
+}
+
+func (m *RecursiveMutex) Lock() {
+    gid := goid.Get()
+    // 如果當前持有鎖的goroutine就是這次調用的goroutine,說明是重入
+    if atomic.LoadInt64(&amp;m.owner) == gid {
+        m.recursion++
+        return
+    }
+    m.Mutex.Lock()
+    // 獲得鎖的goroutine第一次調用，記錄下它的goroutine id,調用次數加1
+    atomic.StoreInt64(&amp;m.owner, gid)
+    m.recursion = 1
+}
+
+func (m *RecursiveMutex) Unlock() {
+    gid := goid.Get()
+    // 非持有鎖的goroutine嘗試釋放鎖，錯誤的使用
+    if atomic.LoadInt64(&amp;m.owner) != gid {
+        panic(fmt.Sprintf("wrong the owner(%d): %d!", m.owner, gid))
+    }
+    // 調用次數減1
+    m.recursion--
+    if m.recursion != 0 { // 如果這個goroutine還沒有完全釋放，則直接返回
+        return
+    }
+    // 此goroutine最後一次調用，需要釋放鎖
+    atomic.StoreInt64(&amp;m.owner, -1)
+    m.Mutex.Unlock()
+}
+</code></pre>
+<p>上面這段代碼你可以拿來即用。我們一起來看下這個實現，真是非常巧妙，它相當於給 Mutex 打一個補丁，解決了記錄鎖的持有者的問題。可以看到，我們用 owner 字段，記錄當前鎖的擁有者 goroutine 的 id；recursion 是輔助字段，用於記錄重入的次數。</p>
+<p>有一點，我要提醒你一句，儘管擁有者可以多次調用 Lock，但是也必須調用相同次數的 Unlock，這樣才能把鎖釋放掉。這是一個合理的設計，可以保證 Lock 和 Unlock 一一對應。</p>
+<p><strong>方案二</strong>：<strong>token</strong></p>
+<p>方案一是用 goroutine id 做 goroutine 的標識，我們也可以讓 goroutine 自己來提供標識。不管怎麼說，Go 開發者不期望你利用 goroutine id 做一些不確定的東西，所以，他們沒有暴露獲取 goroutine id 的方法。</p>
+<p>下面的代碼是第二種方案。調用者自己提供一個 token，獲取鎖的時候把這個 token 傳入，釋放鎖的時候也需要把這個 token 傳入。通過用戶傳入的 token 替換方案一中 goroutine id，其它邏輯和方案一一致。</p>
+<pre><code>// Token方式的遞歸鎖
+type TokenRecursiveMutex struct {
+    sync.Mutex
+    token     int64
+    recursion int32
+}
+
+// 請求鎖，需要傳入token
+func (m *TokenRecursiveMutex) Lock(token int64) {
+    if atomic.LoadInt64(&amp;m.token) == token { //如果傳入的token和持有鎖的token一致，說明是遞歸調用
+        m.recursion++
+        return
+    }
+    m.Mutex.Lock() // 傳入的token不一致，說明不是遞歸調用
+    // 搶到鎖之後記錄這個token
+    atomic.StoreInt64(&amp;m.token, token)
+    m.recursion = 1
+}
+
+// 釋放鎖
+func (m *TokenRecursiveMutex) Unlock(token int64) {
+    if atomic.LoadInt64(&amp;m.token) != token { // 釋放其它token持有的鎖
+        panic(fmt.Sprintf("wrong the owner(%d): %d!", m.token, token))
+    }
+    m.recursion-- // 當前持有這個鎖的token釋放鎖
+    if m.recursion != 0 { // 還沒有回退到最初的遞歸調用
+        return
+    }
+    atomic.StoreInt64(&amp;m.token, 0) // 沒有遞歸調用了，釋放鎖
+    m.Mutex.Unlock()
+}
+死鎖接下來，我們來看第四種錯誤場景：死鎖。
+</code></pre>
+<p>我先解釋下什麼是死鎖。兩個或兩個以上的進程（或線程，goroutine）在執行過程中，因爭奪共享資源而處於一種互相等待的狀態，如果沒有外部干涉，它們都將無法推進下去，此時，我們稱系統處於死鎖狀態或系統產生了死鎖。</p>
+<p>我們來分析一下死鎖產生的必要條件。如果你想避免死鎖，只要破壞這四個條件中的一個或者幾個，就可以了。</p>
+<ol>
+<li><strong>互斥</strong>： 至少一個資源是被排他性獨享的，其他線程必須處於等待狀態，直到資源被釋放。</li>
+<li><strong>持有和等待</strong>：goroutine 持有一個資源，並且還在請求其它 goroutine 持有的資源，也就是咱們常說的“吃著碗裡，看著鍋裡”的意思。</li>
+<li><strong>不可剝奪</strong>：資源只能由持有它的 goroutine 來釋放。</li>
+<li><strong>環路等待</strong>：一般來說，存在一組等待進程，P={P1，P2，…，PN}，P1 等待 P2 持有的資源，P2 等待 P3 持有的資源，依此類推，最後是 PN 等待 P1 持有的資源，這就形成了一個環路等待的死結。</li>
+</ol>
+<p><img src="./images/49c560f01cd3186b534c91107eb51a6d.png" alt="" /></p>
+<p>你看，死鎖問題還真是挺有意思的，所以有很多人研究這個事兒。一個經典的死鎖問題就是哲學家就餐問題，我不做介紹了，你可以點擊鏈接進一步瞭解。其實，死鎖問題在現實生活中也比比皆是。</p>
+<p>舉個例子。有一次我去派出所開證明，派出所要求物業先證明我是本物業的業主，但是，物業要我提供派出所的證明，才能給我開物業證明，結果就陷入了死鎖狀態。你可以把派出所和物業看成兩個 goroutine，派出所證明和物業證明是兩個資源，雙方都持有自己的資源而要求對方的資源，而且自己的資源自己持有，不可剝奪。</p>
+<p>這是一個最簡單的只有兩個 goroutine 相互等待的死鎖的例子，轉化成代碼如下：</p>
+<pre><code>package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+func main() {
+    // 派出所證明
+    var psCertificate sync.Mutex
+    // 物業證明
+    var propertyCertificate sync.Mutex
+
+    var wg sync.WaitGroup
+    wg.Add(2) // 需要派出所和物業都處理
+
+    // 派出所處理goroutine
+    go func() {
+        defer wg.Done() // 派出所處理完成
+
+        psCertificate.Lock()
+        defer psCertificate.Unlock()
+
+        // 檢查材料
+        time.Sleep(5 * time.Second)
+        // 請求物業的證明
+        propertyCertificate.Lock()
+        propertyCertificate.Unlock()
+    }()
+
+    // 物業處理goroutine
+    go func() {
+        defer wg.Done() // 物業處理完成
+
+        propertyCertificate.Lock()
+        defer propertyCertificate.Unlock()
+
+        // 檢查材料
+        time.Sleep(5 * time.Second)
+        // 請求派出所的證明
+        psCertificate.Lock()
+        psCertificate.Unlock()
+    }()
+
+    wg.Wait()
+    fmt.Println("成功完成")
+}
+</code></pre>
+<p>這個程序沒有辦法運行成功，因為派出所的處理和物業的處理是一個環路等待的死結。</p>
+<p><img src="./images/0172f54e55437cc51096ece95defa520.png" alt="" /></p>
+<p>Go 運行時，有死鎖探測的功能，能夠檢查出是否出現了死鎖的情況，如果出現了，這個時候你就需要調整策略來處理了。</p>
+<p>你可以引入一個第三方的鎖，大家都依賴這個鎖進行業務處理，比如現在政府推行的一站式政務服務中心。或者是解決持有等待問題，物業不需要看到派出所的證明才給開物業證明，等等。</p>
+<p>好了，到這裡，我給你講了使用 Mutex 常見的 4 類問題。你是不是覺得，哎呀，這幾類問題也太不應該了吧，真的會有人犯這麼基礎的錯誤嗎？</p>
+<p>還真是有。雖然 Mutex 使用起來很簡單，但是，仍然可能出現使用錯誤的問題。而且，就連一些經驗豐富的開發人員，也會出現一些 Mutex 使用的問題。接下來，我就帶你圍觀幾個非常流行的 Go 開發項目，看看這些錯誤是怎麼產生和修復的。</p>
+<h1 id="流行的-go-開發項目踩坑記"><a class="header" href="#流行的-go-開發項目踩坑記">流行的 Go 開發項目踩坑記</a></h1>
+<h2 id="docker"><a class="header" href="#docker">Docker</a></h2>
+<p>Docker 容器是一個開源的應用容器引擎，開發者可以以統一的方式，把他們的應用和依賴包打包到一個可移植的容器中，然後發佈到任何安裝了 docker 引擎的服務器上。</p>
+<p>Docker 是使用 Go 開發的，也算是 Go 的一個殺手級產品了，它的 Mutex 相關的 Bug 也不少，我們來看幾個典型的 Bug。</p>
+<h3 id="issue-36114"><a class="header" href="#issue-36114">issue 36114</a></h3>
+<p>Docker 的issue 36114 是一個死鎖問題。</p>
+<p>原因在於，hotAddVHDsAtStart 方法執行的時候，執行了加鎖 svm 操作。但是，在其中調用 hotRemoveVHDsAtStart 方法時，這個 hotRemoveVHDsAtStart 方法也是要加鎖 svm 的。很不幸，Go 標準庫中的 Mutex 是不可重入的，所以，代碼執行到這裡，就出現了死鎖的現象。</p>
+<p><img src="./images/204700b83a09b348c0ac147c8e5c8391.png" alt="" /></p>
+<p>針對這個問題，解決辦法就是，再提供一個不需要鎖的 hotRemoveVHDsNoLock 方法，避免 Mutex 的重入。</p>
+<h3 id="issue-34881"><a class="header" href="#issue-34881">issue 34881</a></h3>
+<p>issue 34881本來是修復 Docker 的一個簡單問題，如果節點在初始化的時候，發現自己不是一個 swarm mananger，就快速返回，這個修復就幾行代碼，你看出問題來了嗎？</p>
+<p><img src="./images/5a944cd5ecf91ec0618a7585e7337f2b.png" alt="" /></p>
+<p>在第 34 行，節點發現不滿足條件就返回了，但是，c.mu 這個鎖沒有釋放！為什麼會出現這個問題呢？其實，這是在重構或者添加新功能的時候經常犯的一個錯誤，因為不太瞭解上下文，或者是沒有仔細看函數的邏輯，從而導致鎖沒有被釋放。現在的 Docker 當然已經沒有這個問題了。</p>
+<p><img src="./images/38114afce4cfbc975065599ff2d84faf.png" alt="" /></p>
+<p>這樣的 issue 還有很多，我就不一一列舉了。我給你推薦幾個關於 Mutex 的 issue 或者 pull request，你可以關注一下，分別是 36840、37583、35517、35482、33305、32826、30696、29554、29191、28912、26507 等。</p>
+<h2 id="kubernetes"><a class="header" href="#kubernetes">Kubernetes</a></h2>
+<h3 id="issue-72361"><a class="header" href="#issue-72361">issue 72361</a></h3>
+<p>issue 72361 增加 Mutex 為了保護資源。這是為了解決 data race 問題而做的一個修復，修復方法也很簡單，使用互斥鎖即可，這也是我們解決 data race 時常用的方法。</p>
+<p><img src="./images/258d6fe378561c7532ec48385f5c248e.png" alt="" /></p>
+<h3 id="issue-45192"><a class="header" href="#issue-45192">issue 45192</a></h3>
+<p>issue 45192也是一個返回時忘記 Unlock 的典型例子，和 docker issue 34881 犯的錯誤都是一樣的。</p>
+<p>兩大知名項目的開發者都犯了這個錯誤，所以，你就可以知道，引入這個 Bug 是多麼容易，記住晁老師這句話：<strong>保證 Lock/Unlock 成對出現，儘可能採用 defer mutex.Unlock 的方式，把它們成對、緊湊地寫在一起</strong>。</p>
+<p><img src="./images/2175abbe60af327a8b886614b7264dbd.png" alt="" /></p>
+<p>除了這些，我也建議你關注一下其它的 Mutex 相關的 issue，比如 71617、70605 等。</p>
+<h2 id="grpc"><a class="header" href="#grpc"><strong>gRPC</strong></a></h2>
+<p>gRPC 是 Google 發起的一個開源遠程過程調用 （Remote procedure call）系統。該系統基於 HTTP/2 協議傳輸，使用 Protocol Buffers 作為接口描述語言。它提供 Go 語言的實現。</p>
+<p>即使是 Google 官方出品的系統，也有一些 Mutex 的 issue。</p>
+<h3 id="issue-795"><a class="header" href="#issue-795">issue 795</a></h3>
+<p>issue 795是一個你可能想不到的 bug，那就是將 Unlock 誤寫成了 Lock。</p>
+<p><img src="./images/09800c44988ed3f516a08d3f2f50a91a.png" alt="" /></p>
+<p>關於這個項目，還有一些其他的為了保護共享資源而添加 Mutex 的 issue，比如 1318、2074、2542 等。</p>
+<h2 id="etcd"><a class="header" href="#etcd">etcd</a></h2>
+<p>etcd 是一個非常知名的分佈式一致性的 key-value 存儲技術， 被用來做配置共享和服務發現。</p>
+<h2 id="issue-10419"><a class="header" href="#issue-10419">issue 10419</a></h2>
+<p>issue 10419是一個鎖重入導致的問題。 Store 方法內對請求了鎖，而調用的 Compact 的方法內又請求了鎖，這個時候，會導致死鎖，一直等待，解決辦法就是提供不需要加鎖的 Compact 方法。</p>
+<p><img src="./images/412b7c7ea9d492e146768350972956ac.png" alt="" /></p>
+<h1 id="總結"><a class="header" href="#總結">總結</a></h1>
+<p>這節課，我們學習了 Mutex 的一些易錯場景，而且，我們還分析了流行的 Go 開源項目的錯誤，我也給你分享了我自己在開發中的經驗總結。需要強調的是，<strong>手誤和重入導致的死鎖，是最常見的使用 Mutex 的 Bug</strong>。</p>
+<p>Go 死鎖探測工具只能探測整個程序是否因為死鎖而凍結了，不能檢測出一組 goroutine 死鎖導致的某一塊業務凍結的情況。你還可以通過 Go 運行時自帶的死鎖檢測工具，或者是第三方的工具（比如go-deadlock、go-tools）進行檢查，這樣可以儘早發現一些死鎖的問題。不過，有些時候，死鎖在某些特定情況下才會被觸發，所以，如果你的測試或者短時間的運行沒問題，不代表程序一定不會有死鎖問題。</p>
+<p>併發程序最難跟蹤調試的就是很難重現，因為併發問題不是按照我們指定的順序執行的，由於計算機調度的問題和事件觸發的時機不同，死鎖的 Bug 可能會在極端的情況下出現。通過搜索日誌、查看日誌，我們能夠知道程序有異常了，比如某個流程一直沒有結束。這個時候，可以通過 Go pprof 工具分析，它提供了一個 block profiler 監控阻塞的 goroutine。除此之外，我們還可以查看全部的 goroutine 的堆棧信息，通過它，你可以查看阻塞的 groutine 究竟阻塞在哪一行哪一個對象上了。</p>
+<h1 id="思考題"><a class="header" href="#思考題">思考題</a></h1>
+<p>查找知名的數據庫系統 TiDB 的 issue，看看有沒有 Mutex 相關的 issue，看看它們都是哪些相關的 Bug。</p>
+<p>歡迎在留言區寫下你的思考和答案，我們一起交流討論。如果你覺得有所收穫，也歡迎你把今天的內容分享給你的朋友或同事。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="03.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="05.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="03.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="05.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

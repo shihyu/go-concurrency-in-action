@@ -1,0 +1,634 @@
+<!DOCTYPE HTML>
+<html lang="zh-TW" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>13 | Channel：另闢蹊徑，解決併發問題 - Go 併發編程實戰課</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Go 併發編程實戰課</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="13--channel另闢蹊徑解決併發問題"><a class="header" href="#13--channel另闢蹊徑解決併發問題">13 | Channel：另闢蹊徑，解決併發問題</a></h1>
+<p>你好，我是鳥窩。</p>
+<p>Channel 是 Go 語言內建的 first-class 類型，也是 Go 語言與眾不同的特性之一。Go 語言的 Channel 設計精巧簡單，以至於也有人用其它語言編寫了類似 Go 風格的 Channel 庫，比如docker/libchan、tylertreat/chan，但是並不像 Go 語言一樣把 Channel 內置到了語言規範中。從這一點，你也可以看出來，Channel 的地位在編程語言中的地位之高，比較罕見。</p>
+<p>所以，這節課，我們就來學習下 Channel。</p>
+<h1 id="channel-的發展"><a class="header" href="#channel-的發展">Channel 的發展</a></h1>
+<p>要想了解 Channel 這種 Go 編程語言中的特有的數據結構，我們要追溯到 CSP 模型，學習一下它的歷史，以及它對 Go 創始人設計 Channel 類型的影響。</p>
+<p>CSP 是 Communicating Sequential Process 的簡稱，中文直譯為通信順序進程，或者叫做交換信息的循序進程，是用來描述併發系統中進行交互的一種模式。</p>
+<p>CSP 最早出現於計算機科學家 Tony Hoare 在 1978 年發表的論文中（你可能不熟悉 Tony Hoare 這個名字，但是你一定很熟悉排序算法中的 Quicksort 算法，他就是 Quicksort 算法的作者，圖靈獎的獲得者）。最初，論文中提出的 CSP 版本在本質上不是一種進程演算，而是一種併發編程語言，但之後又經過了一系列的改進，最終發展並精煉出 CSP 的理論。<strong>CSP 允許使用進程組件來描述系統，它們獨立運行，並且只通過消息傳遞的方式通信。</strong></p>
+<p>就像 Go 的創始人之一 Rob Pike 所說的：“每一個計算機程序員都應該讀一讀 Tony Hoare 1978 年的關於 CSP 的論文。”他和 Ken Thompson 在設計 Go 語言的時候也深受此論文的影響，並將 CSP 理論真正應用於語言本身（Russ Cox 專門寫了一篇文章記錄這個歷史），通過引入 Channel 這個新的類型，來實現 CSP 的思想。</p>
+<p><strong>Channel 類型是 Go 語言內置的類型，你無需引入某個包，就能使用它</strong>。雖然 Go 也提供了傳統的併發原語，但是它們都是通過庫的方式提供的，你必須要引入 sync 包或者 atomic 包才能使用它們，而 Channel 就不一樣了，它是內置類型，使用起來非常方便。</p>
+<p>Channel 和 Go 的另一個獨特的特性 goroutine 一起為併發編程提供了優雅的、便利的、與傳統併發控制不同的方案，並演化出很多併發模式。接下來，我們就來看一看 Channel 的應用場景。</p>
+<h1 id="channel-的應用場景"><a class="header" href="#channel-的應用場景">Channel 的應用場景</a></h1>
+<p>首先，我想先帶你看一條 Go 語言中流傳很廣的諺語：</p>
+<blockquote>
+<p>Don’t communicate by sharing memory, share memory by communicating.</p>
+</blockquote>
+<blockquote>
+<p>Go Proverbs by Rob Pike</p>
+</blockquote>
+<p>這是 Rob Pike 在 2015 年的一次 Gopher 會議中提到的一句話，雖然有一點繞，但也指出了使用 Go 語言的哲學，我嘗試著來翻譯一下：“<strong>執行業務處理的 goroutine 不要通過共享內存的方式通信，而是要通過 Channel 通信的方式分享數據。</strong>”</p>
+<p>“communicate by sharing memory”和“share memory by communicating”是兩種不同的併發處理模式。“communicate by sharing memory”是傳統的併發編程處理方式，就是指，共享的數據需要用鎖進行保護，goroutine 需要獲取到鎖，才能併發訪問數據。</p>
+<p>“share memory by communicating”則是類似於 CSP 模型的方式，通過通信的方式，一個 goroutine 可以把數據的“所有權”交給另外一個 goroutine（雖然 Go 中沒有“所有權”的概念，但是從邏輯上說，你可以把它理解為是所有權的轉移）。</p>
+<p>從 Channel 的歷史和設計哲學上，我們就可以瞭解到，Channel 類型和基本併發原語是有競爭關係的，它應用於併發場景，涉及到 goroutine 之間的通訊，可以提供併發的保護，等等。</p>
+<p>綜合起來，我把 Channel 的應用場景分為五種類型。這裡你先有個印象，這樣你可以有目的地去學習 Channel 的基本原理。下節課我會藉助具體的例子，來帶你掌握這幾種類型。</p>
+<ol>
+<li><strong>數據交流</strong>：當作併發的 buffer 或者 queue，解決生產者 - 消費者問題。多個 goroutine 可以併發當作生產者（Producer）和消費者（Consumer）。</li>
+<li><strong>數據傳遞</strong>：一個 goroutine 將數據交給另一個 goroutine，相當於把數據的擁有權 (引用) 託付出去。</li>
+<li><strong>信號通知</strong>：一個 goroutine 可以將信號 (closing、closed、data ready 等) 傳遞給另一個或者另一組 goroutine 。</li>
+<li><strong>任務編排</strong>：可以讓一組 goroutine 按照一定的順序併發或者串行的執行，這就是編排的功能。</li>
+<li><strong>鎖</strong>：利用 Channel 也可以實現互斥鎖的機制。</li>
+</ol>
+<p>下面，我們來具體學習下 Channel 的基本用法。</p>
+<h1 id="channel-基本用法"><a class="header" href="#channel-基本用法">Channel 基本用法</a></h1>
+<p>你可以往 Channel 中發送數據，也可以從 Channel 中接收數據，所以，Channel 類型（為了說起來方便，我們下面都把 Channel 叫做 chan）分為<strong>只能接收</strong>、<strong>只能發送</strong>、<strong>既可以接收又可以發送</strong>三種類型。下面是它的語法定義：</p>
+<pre><code>ChannelType = ( "chan" | "chan" "&lt;-" | "&lt;-" "chan" ) ElementType .
+</code></pre>
+<p>相應地，Channel 的正確語法如下：</p>
+<pre><code>chan string          // 可以發送接收string
+chan&lt;- struct{}      // 只能發送struct{}
+&lt;-chan int           // 只能從chan接收int
+</code></pre>
+<p>我們把既能接收又能發送的 chan 叫做雙向的 chan，把只能發送和只能接收的 chan 叫做單向的 chan。其中，“&lt;-”表示單向的 chan，如果你記不住，我告訴你一個簡便的方法：<strong>這個箭頭總是射向左邊的，元素類型總在最右邊。如果箭頭指向 chan，就表示可以往 chan 中塞數據；如果箭頭遠離 chan，就表示 chan 會往外吐數據</strong>。</p>
+<p>chan 中的元素是任意的類型，所以也可能是 chan 類型，我來舉個例子，比如下面的 chan 類型也是合法的：</p>
+<pre><code>chan&lt;- chan int   
+chan&lt;- &lt;-chan int  
+&lt;-chan &lt;-chan int
+chan (&lt;-chan int)
+</code></pre>
+<p>可是，怎麼判定箭頭符號屬於哪個 chan 呢？其實，“&lt;-”有個規則，總是儘量和左邊的 chan 結合（The <code>&lt;-</code> operator associates with the leftmost <code>chan</code> possible:），因此，上面的定義和下面的使用括號的劃分是一樣的：</p>
+<pre><code>chan&lt;- （chan int） // &lt;- 和第一個chan結合
+chan&lt;- （&lt;-chan int） // 第一個&lt;-和最左邊的chan結合，第二個&lt;-和左邊第二個chan結合
+&lt;-chan （&lt;-chan int） // 第一個&lt;-和最左邊的chan結合，第二個&lt;-和左邊第二個chan結合 
+chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan結合
+</code></pre>
+<p>通過 make，我們可以初始化一個 chan，未初始化的 chan 的零值是 nil。你可以設置它的容量，比如下面的 chan 的容量是 9527，我們把這樣的 chan 叫做 buffered chan；如果沒有設置，它的容量是 0，我們把這樣的 chan 叫做 unbuffered chan。</p>
+<pre><code>make(chan int, 9527)
+</code></pre>
+<p>如果 chan 中還有數據，那麼，從這個 chan 接收數據的時候就不會阻塞，如果 chan 還未滿（“滿”指達到其容量），給它發送數據也不會阻塞，否則就會阻塞。unbuffered chan 只有讀寫都準備好之後才不會阻塞，這也是很多使用 unbuffered chan 時的常見 Bug。</p>
+<p>還有一個知識點需要你記住：nil 是 chan 的零值，是一種特殊的 chan，對值是 nil 的 chan 的發送接收調用者總是會阻塞。</p>
+<p>下面，我來具體給你介紹幾種基本操作，分別是發送數據、接收數據，以及一些其它操作。學會了這幾種操作，你就能真正地掌握 Channel 的用法了。</p>
+<p><strong>1. 發送數據</strong></p>
+<p>往 chan 中發送一個數據使用“ch&lt;-”，發送數據是一條語句:</p>
+<pre><code>ch &lt;- 2000
+</code></pre>
+<p>這裡的 ch 是 chan int 類型或者是 chan &lt;-int。</p>
+<p><strong>2. 接收數據</strong></p>
+<p>從 chan 中接收一條數據使用“&lt;-ch”，接收數據也是一條語句：</p>
+<pre><code>  x := &lt;-ch // 把接收的一條數據賦值給變量x
+  foo(&lt;-ch) // 把接收的一個的數據作為參數傳給函數
+  &lt;-ch // 丟棄接收的一條數據
+</code></pre>
+<p>這裡的 ch 類型是 chan T 或者 &lt;-chan T。</p>
+<p>接收數據時，還可以返回兩個值。第一個值是返回的 chan 中的元素，很多人不太熟悉的是第二個值。第二個值是 bool 類型，代表是否成功地從 chan 中讀取到一個值，如果第二個參數是 false，chan 已經被 close 而且 chan 中沒有緩存的數據，這個時候，第一個值是零值。所以，如果從 chan 讀取到一個零值，可能是 sender 真正發送的零值，也可能是 closed 的並且沒有緩存元素產生的零值。</p>
+<p><strong>3. 其它操作</strong></p>
+<p>Go 內建的函數 close、cap、len 都可以操作 chan 類型：close 會把 chan 關閉掉，cap 返回 chan 的容量，len 返回 chan 中緩存的還未被取走的元素數量。</p>
+<p>send 和 recv 都可以作為 select 語句的 case clause，如下面的例子：</p>
+<pre><code>func main() {
+    var ch = make(chan int, 10)
+    for i := 0; i &lt; 10; i++ {
+        select {
+        case ch &lt;- i:
+        case v := &lt;-ch:
+            fmt.Println(v)
+        }
+    }
+}
+</code></pre>
+<p>chan 還可以應用於 for-range 語句中，比如：</p>
+<pre><code>    for v := range ch {
+        fmt.Println(v)
+    }
+</code></pre>
+<p>或者是忽略讀取的值，只是清空 chan：</p>
+<pre><code>    for range ch {
+    }
+</code></pre>
+<p>好了，到這裡，Channel 的基本用法，我們就學完了。下面我從代碼實現的角度分析 chan 類型的實現。畢竟，只有掌握了原理，你才能真正地用好它。</p>
+<h1 id="channel-的實現原理"><a class="header" href="#channel-的實現原理">Channel 的實現原理</a></h1>
+<p>接下來，我會給你介紹 chan 的數據結構、初始化的方法以及三個重要的操作方法，分別是 send、recv 和 close。通過學習 Channel 的底層實現，你會對 Channel 的功能和異常情況有更深的理解。</p>
+<h2 id="chan-數據結構"><a class="header" href="#chan-數據結構">chan 數據結構</a></h2>
+<p>chan 類型的數據結構如下圖所示，它的數據類型是runtime.hchan。</p>
+<p><img src="./images/a9f7e1a3a3fe90e06840e44c77954884.png" alt="" /></p>
+<p>下面我來具體解釋各個字段的意義。</p>
+<ol>
+<li>qcount：代表 chan 中已經接收但還沒被取走的元素的個數。內建函數 len 可以返回這個字段的值。</li>
+<li>dataqsiz：隊列的大小。chan 使用一個循環隊列來存放元素，循環隊列很適合這種生產者 - 消費者的場景（我很好奇為什麼這個字段省略 size 中的 e）。</li>
+<li>buf：存放元素的循環隊列的 buffer。</li>
+<li>elemtype 和 elemsize：chan 中元素的類型和 size。因為 chan 一旦聲明，它的元素類型是固定的，即普通類型或者指針類型，所以元素大小也是固定的。</li>
+<li>sendx：處理發送數據的指針在 buf 中的位置。一旦接收了新的數據，指針就會加上 elemsize，移向下一個位置。buf 的總大小是 elemsize 的整數倍，而且 buf 是一個循環列表。</li>
+<li>recvx：處理接收請求時的指針在 buf 中的位置。一旦取出數據，此指針會移動到下一個位置。</li>
+<li>recvq：chan 是多生產者多消費者的模式，如果消費者因為沒有數據可讀而被阻塞了，就會被加入到 recvq 隊列中。</li>
+<li>sendq：如果生產者因為 buf 滿了而阻塞，會被加入到 sendq 隊列中。</li>
+</ol>
+<h2 id="初始化"><a class="header" href="#初始化">初始化</a></h2>
+<p>Go 在編譯的時候，會根據容量的大小選擇調用 makechan64，還是 makechan。</p>
+<p>下面的代碼是處理 make chan 的邏輯，它會決定是使用 makechan 還是 makechan64 來實現 chan 的初始化：</p>
+<p><img src="./images/e347727c9fd4fd119435a29aa84f4f73.png" alt="" /></p>
+<p><strong>我們只關注 makechan 就好了，因為 makechan64 只是做了 size 檢查，底層還是調用 makechan 實現的</strong>。makechan 的目標就是生成 hchan 對象。</p>
+<p>那麼，接下來，就讓我們來看一下 makechan 的主要邏輯。主要的邏輯我都加上了註釋，它會根據 chan 的容量的大小和元素的類型不同，初始化不同的存儲空間：</p>
+<pre><code>func makechan(t *chantype, size int) *hchan {
+    elem := t.elem
+  
+        // 略去檢查代碼
+        mem, overflow := math.MulUintptr(elem.size, uintptr(size))
+        
+    //
+    var c *hchan
+    switch {
+    case mem == 0:
+      // chan的size或者元素的size是0，不必創建buf
+      c = (*hchan)(mallocgc(hchanSize, nil, true))
+      c.buf = c.raceaddr()
+    case elem.ptrdata == 0:
+      // 元素不是指針，分配一塊連續的內存給hchan數據結構和buf
+      c = (*hchan)(mallocgc(hchanSize+mem, nil, true))
+            // hchan數據結構後面緊接著就是buf
+      c.buf = add(unsafe.Pointer(c), hchanSize)
+    default:
+      // 元素包含指針，那麼單獨分配buf
+      c = new(hchan)
+      c.buf = mallocgc(mem, elem, true)
+    }
+  
+        // 元素大小、類型、容量都記錄下來
+    c.elemsize = uint16(elem.size)
+    c.elemtype = elem
+    c.dataqsiz = uint(size)
+    lockInit(&amp;c.lock, lockRankHchan)
+
+    return c
+  }
+</code></pre>
+<p>最終，針對不同的容量和元素類型，這段代碼分配了不同的對象來初始化 hchan 對象的字段，返回 hchan 對象。</p>
+<h2 id="send"><a class="header" href="#send">send</a></h2>
+<p>Go 在編譯發送數據給 chan 的時候，會把 send 語句轉換成 chansend1 函數，chansend1 函數會調用 chansend，我們分段學習它的邏輯：</p>
+<pre><code>func chansend1(c *hchan, elem unsafe.Pointer) {
+    chansend(c, elem, true, getcallerpc())
+}
+func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+        // 第一部分
+    if c == nil {
+      if !block {
+        return false
+      }
+      gopark(nil, nil, waitReasonChanSendNilChan, traceEvGoStop, 2)
+      throw("unreachable")
+    }
+      ......
+  }
+</code></pre>
+<p>最開始，第一部分是進行判斷：如果 chan 是 nil 的話，就把調用者 goroutine park（阻塞休眠）， 調用者就永遠被阻塞住了，所以，第 11 行是不可能執行到的代碼。</p>
+<pre><code>  // 第二部分，如果chan沒有被close,並且chan滿了，直接返回
+    if !block &amp;&amp; c.closed == 0 &amp;&amp; full(c) {
+      return false
+  }
+</code></pre>
+<p>第二部分的邏輯是當你往一個已經滿了的 chan 實例發送數據時，並且想不阻塞當前調用，那麼這裡的邏輯是直接返回。chansend1 方法在調用 chansend 的時候設置了阻塞參數，所以不會執行到第二部分的分支裡。</p>
+<pre><code>  // 第三部分，chan已經被close的情景
+    lock(&amp;c.lock) // 開始加鎖
+    if c.closed != 0 {
+      unlock(&amp;c.lock)
+      panic(plainError("send on closed channel"))
+  }
+</code></pre>
+<p>第三部分顯示的是，如果 chan 已經被 close 了，再往裡面發送數據的話會 panic。</p>
+<pre><code>      // 第四部分，從接收隊列中出隊一個等待的receiver
+        if sg := c.recvq.dequeue(); sg != nil {
+      // 
+      send(c, sg, ep, func() { unlock(&amp;c.lock) }, 3)
+      return true
+    }
+</code></pre>
+<p>第四部分，如果等待隊列中有等待的 receiver，那麼這段代碼就把它從隊列中彈出，然後直接把數據交給它（通過 memmove(dst, src, t.size)），而不需要放入到 buf 中，速度可以更快一些。</p>
+<pre><code>    // 第五部分，buf還沒滿
+      if c.qcount &lt; c.dataqsiz {
+      qp := chanbuf(c, c.sendx)
+      if raceenabled {
+        raceacquire(qp)
+        racerelease(qp)
+      }
+      typedmemmove(c.elemtype, qp, ep)
+      c.sendx++
+      if c.sendx == c.dataqsiz {
+        c.sendx = 0
+      }
+      c.qcount++
+      unlock(&amp;c.lock)
+      return true
+    }
+</code></pre>
+<p>第五部分說明當前沒有 receiver，需要把數據放入到 buf 中，放入之後，就成功返回了。</p>
+<pre><code>      // 第六部分，buf滿。
+        // chansend1不會進入if塊裡，因為chansend1的block=true
+        if !block {
+      unlock(&amp;c.lock)
+      return false
+    }
+        ......
+</code></pre>
+<p>第六部分是處理 buf 滿的情況。如果 buf 滿了，發送者的 goroutine 就會加入到發送者的等待隊列中，直到被喚醒。這個時候，數據或者被取走了，或者 chan 被 close 了。</p>
+<h2 id="recv"><a class="header" href="#recv">recv</a></h2>
+<p>在處理從 chan 中接收數據時，Go 會把代碼轉換成 chanrecv1 函數，如果要返回兩個返回值，會轉換成 chanrecv2，chanrecv1 函數和 chanrecv2 會調用 chanrecv。我們分段學習它的邏輯：</p>
+<pre><code>    func chanrecv1(c *hchan, elem unsafe.Pointer) {
+    chanrecv(c, elem, true)
+  }
+  func chanrecv2(c *hchan, elem unsafe.Pointer) (received bool) {
+    _, received = chanrecv(c, elem, true)
+    return
+  }
+
+    func chanrecv(c *hchan, ep unsafe.Pointer, block bool) (selected, received bool) {
+        // 第一部分，chan為nil
+    if c == nil {
+      if !block {
+        return
+      }
+      gopark(nil, nil, waitReasonChanReceiveNilChan, traceEvGoStop, 2)
+      throw("unreachable")
+    }
+</code></pre>
+<p>chanrecv1 和 chanrecv2 傳入的 block 參數的值是 true，都是阻塞方式，所以我們分析 chanrecv 的實現的時候，不考慮 block=false 的情況。</p>
+<p>第一部分是 chan 為 nil 的情況。和 send 一樣，從 nil chan 中接收（讀取、獲取）數據時，調用者會被永遠阻塞。</p>
+<pre><code>  // 第二部分, block=false且c為空
+    if !block &amp;&amp; empty(c) {
+      ......
+    }
+</code></pre>
+<p>第二部分你可以直接忽略，因為不是我們這次要分析的場景。</p>
+<pre><code>        // 加鎖，返回時釋放鎖
+      lock(&amp;c.lock)
+      // 第三部分，c已經被close,且chan為空empty
+    if c.closed != 0 &amp;&amp; c.qcount == 0 {
+      unlock(&amp;c.lock)
+      if ep != nil {
+        typedmemclr(c.elemtype, ep)
+      }
+      return true, false
+    }
+</code></pre>
+<p>第三部分是 chan 已經被 close 的情況。如果 chan 已經被 close 了，並且隊列中沒有緩存的元素，那麼返回 true、false。</p>
+<pre><code>      // 第四部分，如果sendq隊列中有等待發送的sender
+        if sg := c.sendq.dequeue(); sg != nil {
+      recv(c, sg, ep, func() { unlock(&amp;c.lock) }, 3)
+      return true, true
+    }
+</code></pre>
+<p>第四部分是處理 sendq 隊列中有等待者的情況。這個時候，如果 buf 中有數據，優先從 buf 中讀取數據，否則直接從等待隊列中彈出一個 sender，把它的數據複製給這個 receiver。</p>
+<pre><code>      // 第五部分, 沒有等待的sender, buf中有數據
+    if c.qcount &gt; 0 {
+      qp := chanbuf(c, c.recvx)
+      if ep != nil {
+        typedmemmove(c.elemtype, ep, qp)
+      }
+      typedmemclr(c.elemtype, qp)
+      c.recvx++
+      if c.recvx == c.dataqsiz {
+        c.recvx = 0
+      }
+      c.qcount--
+      unlock(&amp;c.lock)
+      return true, true
+    }
+
+    if !block {
+      unlock(&amp;c.lock)
+      return false, false
+    }
+
+        // 第六部分， buf中沒有元素，阻塞
+        ......
+</code></pre>
+<p>第五部分是處理沒有等待的 sender 的情況。這個是和 chansend 共用一把大鎖，所以不會有併發的問題。如果 buf 有元素，就取出一個元素給 receiver。</p>
+<p>第六部分是處理 buf 中沒有元素的情況。如果沒有元素，那麼當前的 receiver 就會被阻塞，直到它從 sender 中接收了數據，或者是 chan 被 close，才返回。</p>
+<h2 id="close"><a class="header" href="#close">close</a></h2>
+<p>通過 close 函數，可以把 chan 關閉，編譯器會替換成 closechan 方法的調用。</p>
+<p>下面的代碼是 close chan 的主要邏輯。如果 chan 為 nil，close 會 panic；如果 chan 已經 closed，再次 close 也會 panic。否則的話，如果 chan 不為 nil，chan 也沒有 closed，就把等待隊列中的 sender（writer）和 receiver（reader）從隊列中全部移除並喚醒。</p>
+<p>下面的代碼就是 close chan 的邏輯:</p>
+<pre><code>    func closechan(c *hchan) {
+    if c == nil { // chan為nil, panic
+      panic(plainError("close of nil channel"))
+    }
+  
+    lock(&amp;c.lock)
+    if c.closed != 0 {// chan已經closed, panic
+      unlock(&amp;c.lock)
+      panic(plainError("close of closed channel"))
+    }
+
+    c.closed = 1  
+
+    var glist gList
+
+    // 釋放所有的reader
+    for {
+      sg := c.recvq.dequeue()
+      ......
+      gp := sg.g
+      ......
+      glist.push(gp)
+    }
+  
+    // 釋放所有的writer (它們會panic)
+    for {
+      sg := c.sendq.dequeue()
+      ......
+      gp := sg.g
+      ......
+      glist.push(gp)
+    }
+    unlock(&amp;c.lock)
+  
+    for !glist.empty() {
+      gp := glist.pop()
+      gp.schedlink = 0
+      goready(gp, 3)
+    }
+  }
+</code></pre>
+<p>掌握了 Channel 的基本用法和實現原理，下面我再來給你講一講容易犯的錯誤。你一定要認真看，畢竟，這些可都是幫助你避坑的。</p>
+<h1 id="使用-channel-容易犯的錯誤"><a class="header" href="#使用-channel-容易犯的錯誤">使用 Channel 容易犯的錯誤</a></h1>
+<p>根據 2019 年第一篇全面分析 Go 併發 Bug 的論文，那些知名的 Go 項目中使用 Channel 所犯的 Bug 反而比傳統的併發原語的 Bug 還要多。主要有兩個原因：一個是，Channel 的概念還比較新，程序員還不能很好地掌握相應的使用方法和最佳實踐；第二個是，Channel 有時候比傳統的併發原語更復雜，使用起來很容易顧此失彼。</p>
+<p><strong>使用 Channel 最常見的錯誤是 panic 和 goroutine 洩漏</strong>。</p>
+<p>首先，我們來總結下會 panic 的情況，總共有 3 種：</p>
+<ol>
+<li>close 為 nil 的 chan；</li>
+<li>send 已經 close 的 chan；</li>
+<li>close 已經 close 的 chan。</li>
+</ol>
+<p>goroutine 洩漏的問題也很常見，下面的代碼也是一個實際項目中的例子：</p>
+<pre><code>func process(timeout time.Duration) bool {
+    ch := make(chan bool)
+
+    go func() {
+        // 模擬處理耗時的業務
+        time.Sleep((timeout + time.Second))
+        ch &lt;- true // block
+        fmt.Println("exit goroutine")
+    }()
+    select {
+    case result := &lt;-ch:
+        return result
+    case &lt;-time.After(timeout):
+        return false
+    }
+}
+</code></pre>
+<p>在這個例子中，process 函數會啟動一個 goroutine，去處理需要長時間處理的業務，處理完之後，會發送 true 到 chan 中，目的是通知其它等待的 goroutine，可以繼續處理了。</p>
+<p>我們來看一下第 10 行到第 15 行，主 goroutine 接收到任務處理完成的通知，或者超時後就返回了。這段代碼有問題嗎？</p>
+<p>如果發生超時，process 函數就返回了，這就會導致 unbuffered 的 chan 從來就沒有被讀取。我們知道，unbuffered chan 必須等 reader 和 writer 都準備好了才能交流，否則就會阻塞。超時導致未讀，結果就是子 goroutine 就阻塞在第 7 行永遠結束不了，進而導致 goroutine 洩漏。</p>
+<p>解決這個 Bug 的辦法很簡單，就是將 unbuffered chan 改成容量為 1 的 chan，這樣第 7 行就不會被阻塞了。</p>
+<p>Go 的開發者極力推薦使用 Channel，不過，這兩年，大家意識到，Channel 並不是處理併發問題的“銀彈”，有時候使用併發原語更簡單，而且不容易出錯。所以，我給你提供一套選擇的方法:</p>
+<ol>
+<li>共享資源的併發訪問使用傳統併發原語；</li>
+<li>複雜的任務編排和消息傳遞使用 Channel；</li>
+<li>消息通知機制使用 Channel，除非只想 signal 一個 goroutine，才使用 Cond；</li>
+<li>簡單等待所有任務的完成用 WaitGroup，也有 Channel 的推崇者用 Channel，都可以；</li>
+<li>需要和 Select 語句結合，使用 Channel；</li>
+<li>需要和超時配合時，使用 Channel 和 Context。</li>
+</ol>
+<h1 id="它們踩過的坑"><a class="header" href="#它們踩過的坑">它們踩過的坑</a></h1>
+<p>接下來，我帶你圍觀下知名 Go 項目的 Channel 相關的 Bug。</p>
+<p>etcd issue 6857是一個程序 hang 住的問題：在異常情況下，沒有往 chan 實例中填充所需的元素，導致等待者永遠等待。具體來說，Status 方法的邏輯是生成一個 chan Status，然後把這個 chan 交給其它的 goroutine 去處理和寫入數據，最後，Status 返回獲取的狀態信息。</p>
+<p>不幸的是，如果正好節點停止了，沒有 goroutine 去填充這個 chan，會導致方法 hang 在返回的那一行上（下面的截圖中的第 466 行）。解決辦法就是，在等待 status chan 返回元素的同時，也檢查節點是不是已經停止了（done 這個 chan 是不是 close 了）。</p>
+<p>當前的 etcd 的代碼就是修復後的代碼，如下所示：</p>
+<p><img src="./images/dd43a14ccaef9d92285e2d8865c34c0a.png" alt="" /></p>
+<p>其實，我感覺這個修改還是有問題的。問題就在於，如果程序執行了 466 行，成功地把 c 寫入到 Status 待處理隊列後，執行到第 467 行時，如果停止了這個節點，那麼，這個 Status 方法還是會阻塞在第 467 行。你可以自己研究研究，看看是不是這樣。</p>
+<p>etcd issue 5505 雖然沒有任何的 Bug 描述，但是從修復內容上看，它是一個往已經 close 的 chan 寫數據導致 panic 的問題。</p>
+<p>etcd issue 11256 是因為 unbuffered chan goroutine 洩漏的問題。TestNodeProposeAddLearnerNode 方法中一開始定義了一個 unbuffered 的 chan，也就是 applyConfChan，然後啟動一個子 goroutine，這個子 goroutine 會在循環中執行業務邏輯，並且不斷地往這個 chan 中添加一個元素。TestNodeProposeAddLearnerNode 方法的末尾處會從這個 chan 中讀取一個元素。</p>
+<p>這段代碼在 for 循環中就往此 chan 中寫入了一個元素，結果導致 TestNodeProposeAddLearnerNode 從這個 chan 中讀取到元素就返回了。悲劇的是，子 goroutine 的 for 循環還在執行，阻塞在下圖中紅色的第 851 行，並且一直 hang 在那裡。</p>
+<p>這個 Bug 的修復也很簡單，只要改動一下 applyConfChan 的處理邏輯就可以了：只有子 goroutine 的 for 循環中的主要邏輯完成之後，才往 applyConfChan 發送一個元素，這樣，TestNodeProposeAddLearnerNode 收到通知繼續執行，子 goroutine 也不會被阻塞住了。</p>
+<p><img src="./images/66abb03757d038287245195097bfc53e.png" alt="" /></p>
+<p>etcd issue 9956 是往一個已 close 的 chan 發送數據，其實它是 grpc 的一個 bug（grpc issue 2695），修復辦法就是不 close 這個 chan 就好了：</p>
+<p><img src="./images/0c4a99dca978a224ee4f6f767e360bed.png" alt="" /></p>
+<h1 id="總結"><a class="header" href="#總結">總結</a></h1>
+<p>chan 的值和狀態有多種情況，而不同的操作（send、recv、close）又可能得到不同的結果，這是使用 chan 類型時經常讓人困惑的地方。</p>
+<p>為了幫助你快速地瞭解不同狀態下各種操作的結果，我總結了一個表格，你一定要特別關注下那些 panic 的情況，另外還要掌握那些會 block 的場景，它們是導致死鎖或者 goroutine 洩露的罪魁禍首。</p>
+<p>還有一個值得注意的點是，只要一個 chan 還有未讀的數據，即使把它 close 掉，你還是可以繼續把這些未讀的數據消費完，之後才是讀取零值數據。</p>
+<p><img src="./images/a4f1f1ba43681966ed784f213228adff.png" alt="" /></p>
+<h1 id="思考題"><a class="header" href="#思考題">思考題</a></h1>
+<ol>
+<li>有一道經典的使用 Channel 進行任務編排的題，你可以嘗試做一下：有四個 goroutine，編號為 1、2、3、4。每秒鐘會有一個 goroutine 打印出它自己的編號，要求你編寫一個程序，讓輸出的編號總是按照 1、2、3、4、1、2、3、4、……的順序打印出來。</li>
+<li>chan T 是否可以給 &lt;- chan T 和 chan&lt;- T 類型的變量賦值？反過來呢？</li>
+</ol>
+<p>歡迎在留言區寫下你的思考和答案，我們一起交流討論。如果你覺得有所收穫，也歡迎你把今天的內容分享給你的朋友或同事。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="13.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="15.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="13.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="15.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

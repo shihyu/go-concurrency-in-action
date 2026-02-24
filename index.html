@@ -1,0 +1,273 @@
+<!DOCTYPE HTML>
+<html lang="zh-TW" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>開篇詞 | 想吃透Go併發編程，你得這樣學！ - Go 併發編程實戰課</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Go 併發編程實戰課</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="開篇詞--想吃透go併發編程你得這樣學"><a class="header" href="#開篇詞--想吃透go併發編程你得這樣學">開篇詞 | 想吃透Go併發編程，你得這樣學！</a></h1>
+<p>你好，我是晁嶽攀，網名鳥窩。之前我在微博研發平臺架構中心擔任資深架構師，同時也是微服務框架 rpcx 的作者，歡迎來到“Go 併發編程實戰課”。</p>
+<h2 id="併發編程為什麼選-go"><a class="header" href="#併發編程為什麼選-go">併發編程，為什麼選 Go？</a></h2>
+<p>為什麼要學 Go 併發呢？我想先和你聊聊我和 Go 結緣的經歷。</p>
+<p>作為一位老程序員，我在清華同方、摩托羅拉、Comcast 等公司，一直使用 Java 做項目開發。但是後來，我毅然拋棄了十幾年的 Java 編程經驗，投入到了 Go 語言的懷抱，為什麼呢？</p>
+<p>一句話，我被 Go 的簡單高效所打動。它不僅部署方便，自帶完善的工具鏈，特別是 Go 在處理併發場景上表現出的獨特性能，更是讓我著迷。</p>
+<p>我們知道，Java 語言的編碼非常繁瑣，為了應用設計模式而做了大量的冗長設計，而 Go 就不一樣了。它提供了便利的併發編程方式，簡簡單單的 Go 語句，就可以創建多個 goroutine 執行併發任務。而且，Go 還提供了獨特的 Channel 類型，很容易實現 goroutine 之間的數據交流。所以，Go 併發編程入門很容易，即使是初學者，要寫一個使用 goroutine 異步輸出“Hello World”的例子，也可以不費吹灰之力。</p>
+<p>不過，和其他語言相比，Go 微服務治理框架的發展還是比較晚的。當阿里出品的 Java 微服務框架 Dubbo 被廣泛應用時，Go 生態圈還沒有微服務框架。</p>
+<p>於是，四五年前，為了填補 Go 生態圈微服務化的缺失，我就用 Go 開發了一個微服務的框架 rpcx。它既有類似標準 rpc 庫的易用特點，又包含了非常豐富的服務治理的功能。而且，根據benchmark 測試，rpcx 有著數一數二的性能，很多互聯網企業（比如馬蜂窩、百度等）都在使用。</p>
+<p>在微博的四年時間裡，我使用 Go 參與開發多個基礎架構系統，並負責中國版權鏈、微博下一代的 Redis 集群系統、數據庫資源雲等系統的設計和開發工作。在多年的實戰中，我遇見過各種各樣的併發難題，積累了大量的高併發高吞吐的服務器開發經驗，也梳理了一整套併發編程的知識體系。</p>
+<p>2019 年，astaxie（謝孟軍）邀請我在 Gopher China 大會上做一個關於 Go 併發編程的分享。我準備了一份 120 頁的PPT，全面地介紹了 Go 併發編程的基礎內容，包括基本併發原語、擴展併發原語和 Channel 等。會後，現場的觀眾都說乾貨滿滿，希望我能提供無刪改版的 PPT。</p>
+<p>後來，在 Go 愛好者的強烈要求下，我又在滴滴舉辦了一場 Go 併發編程的培訓，詳細地分享了我的併發編程心得和經驗，包括各種併發原語的基本用法和實現機制。</p>
+<p>結合我自己的開發經驗，以及這些年的技術分享經歷，我真切地感受到了這一點：<strong>Go 併發編程的重要性不容置疑。只要是使用 Go 開發的大型應用程序，併發是必然要採用的技術。</strong></p>
+<p>但同時，我也瞭解到，很多人想要學習 Go 併發編程，卻不知道該從何學起，也不知該如何精進。</p>
+<h2 id="學習-go-併發編程有哪些困難"><a class="header" href="#學習-go-併發編程有哪些困難">學習 Go 併發編程，有哪些困難？</a></h2>
+<p>那學習 Go 併發會有哪些困難呢？我總結了一下，主要是有 5 大問題。</p>
+<ol>
+<li>在面對併發難題時，感覺無從下手，不知道<strong>該用什麼併發原語來解決問題</strong>。</li>
+<li>如果多個併發原語都可以解決問題，那麼，<strong>究竟哪個是最優解呢</strong>？比如說是用互斥鎖，還是用 Channel。</li>
+<li><strong>不知道如何編排併發任務</strong>。併發編程不像是傳統的串行編程，程序的運行存在著很大的不確定性。這個時候，就會面臨一個問題，<strong>怎麼才能讓相應的任務按照你設想的流程運行呢</strong>？</li>
+<li>有時候，按照正常理解的併發方式去實現的程序，結果莫名其妙就 panic 或者死鎖了，<strong>排查起來非常困難</strong>。</li>
+<li><strong>已知的併發原語都不能解決併發問題</strong>，程序寫起來異常複雜，而且代碼混亂，容易出錯。</li>
+</ol>
+<p>每一位剛入門 Go 的程序員，在深入學習 Go 語言的時候，尤其是面對 Go 併發編程的時候，都會遇到這些問題。那麼，具體該怎麼學呢？</p>
+<h2 id="怎麼提升-go-併發編程能力"><a class="header" href="#怎麼提升-go-併發編程能力">怎麼提升 Go 併發編程能力？</a></h2>
+<p>學習這件事兒，最怕的就是不成體系，即使知識點之間是彼此獨立的，也必定存在著聯繫。我們要做的，就是找出邏輯關係，拎出知識線。我認為，<strong>關於 Go 併發編程，有兩條主線，分別是知識主線和學習主線</strong>。具體是啥意思呢？可以看下面的這張知識地圖。</p>
+<p><img src="./images/c7ac759fe5b87fff480ba47e6df76b21.png" alt="" /></p>
+<p>從圖中可以看到，在知識主線層面，這門課程的核心內容設計了 5 個模塊：</p>
+<ol>
+<li><strong>基本併發原語</strong>：在這部分，我會介紹 Mutex、RWMutex、Waitgroup、Cond、Pool、Context 等標準庫中的併發原語，這些都是傳統的併發原語，在其它語言中也很常見，是我們在併發編程中常用的類型。</li>
+<li>**原子操作：**在這部分，我會介紹 Go 標準庫中提供的原子操作。原子操作是其它併發原語的基礎，學會了你就可以自己創造新的併發原語。</li>
+<li><strong>Channel</strong>：Channel 類型是 Go 語言獨特的類型，因為比較新，所以難以掌握。但是別怕，我會帶你全方位地學習 Channel 類型，你不僅能掌握它的基本用法，而且還能掌握它的處理場景和應用模式，避免踩坑。</li>
+<li><strong>擴展併發原語</strong>：目前來看，Go 開發組不準備在標準庫中擴充併發原語了，但是還有一些併發原語應用廣泛，比如信號量、SingleFlight、循環柵欄、ErrGroup 等。掌握了它們，就可以在處理一些併發問題時，取得事半功倍的效果。</li>
+<li><strong>分佈式併發原語</strong>：分佈式併發原語是應對大規模的應用程序中併發問題的併發類型。我主要會介紹使用 etcd 實現的一些分佈式併發原語，比如 Leader 選舉、分佈式互斥鎖、分佈式讀寫鎖、分佈式隊列等，在處理分佈式場景的併發問題時，特別有用。</li>
+</ol>
+<p><img src="./images/d04dc0b433d4c212dc607c860795cfe2.png" alt="" /></p>
+<p>沿著這條知識主線，我會帶你建立起一個豐富的併發原語庫。你可以把併發問題當成一個強大的敵人，而這些併發原語，就是我們的武器。每一種併發原語都有它的用處，你只有知道足夠多的併發原語，才能靈活地應對各種場景。</p>
+<p>那具體怎麼掌握這些武器呢？課程的每一個模塊都是獨立的，它們之間沒有任何依賴問題，你可以結合自己的實際情況，有重點地進行學習。如果你對 Channel 類型不是太熟悉，就可以先看 Channel 這個模塊的內容；如果你已經非常熟悉標準庫的併發原語了，就可以看看擴展併發原語和分佈式併發原語的內容。</p>
+<p>同時，在學習主線層面，主要是<strong>四大步驟，包括基礎用法、實現原理、易錯場景、知名項目中的 Bug</strong>。每一個模塊，我都會帶著你按照這四個步驟來學習，目的就是帶你熟知每一種併發原語的實現機制和適用場景。</p>
+<p>Go 中有一個大的方向，就是任務編排用 Channel，共享資源保護用傳統併發原語。在剛開始學習時，你可以基於這個原則去選擇相應的併發原語，這是沒錯的。但是，如果你想要在 Go 併發編程的道路上向前走，就不能侷限於這個原則。</p>
+<p>實際上，針對同一種場景，也許存在很多併發原語都適用的情況，但是一定是有最合適的那一個。所以，你必須非常清楚每種併發原語的實現機制和適用場景，千萬不要被網上的一些文章誤導，萬事皆用 Channel。</p>
+<p>而且，你還可以深入學習下 Go 併發原語的源代碼。你會發現很多獨到的設計，比如 Mutex 為了公平性考量的設計、sync.Map 為提升性能做的設計，以及很多併發原語的異常狀況的處理方式。尤其是這些異常狀況，常常是併發編程中程序 panic 的原因。</p>
+<p>所以，如果你能深入瞭解這些併發原語的實現，不但會提高你的編程能力，還能讓你避免在開發中踩併發問題的坑。這個時候，你就達到精通的程度了。</p>
+<p>如果沒有做過大型併發項目，你可能還不太清楚併發原語的重要性。那麼，我建議你先閱讀一下課程中介紹的知名項目中犯的錯，這也是這門課裡我特別設計的一部分內容。通過理解這些 Go 大牛們犯的錯誤以及解決方案，你就可以積累一套避坑指南和應對之道。</p>
+<p>有了這兩條線的學習，我們就從廣度和深度上掌握了 Go 併發編程的知識點。這些是不是就足夠了呢？我們還可以更進一步，你要有野心能夠創造出自己需要的併發原語。</p>
+<p>這裡的創造有兩層含義。第一層是對既有的併發原語進行組合，使用兩個、三個或者更多的併發原語去解決問題。比如說，我們可以通過信號量和 WaitGroup 組合成一個新的併發原語，這個併發原語可以使用有限個 goroutine 併發處理子任務。第二層含義是“無中生有”，根據已經掌握的併發原語的設計經驗，創造出合適的新的併發原語，以應對一些特殊的併發問題。比如說，標準庫中並沒有信號量，你可以自己創造出這個類型。</p>
+<p>達到了這一層，那就不得了了，可以說你對 Go 併發原語的掌握已經出神入化了。那想要達到這個程度是不是很難呢？確實不容易，不過我相信，如果你仔細學習了我們課程裡的每一節課，心裡牢牢地錨定 3 個目標：建立起一個豐富的併發原語庫；熟知每一種併發原語的實現機制和適用場景；能夠創造出自己需要的併發原語。達到了這 3 個目標，你就可以輕鬆地應對各種併發問題了。甚至可以說，你幾乎能站在 Go 併發編程的頂端，成為大牛中的一員。</p>
+<p>最後，我想說的是，Go 併發編程的世界確實紛繁複雜，涉及到的內容非常多。你可以把它看作是一個江湖，如果你想擁有極強的作戰力，就要擁有足夠多的武器，並且修煉內功。這門課，就是你的修煉山洞，我準備了應有盡有的寶藏，等待著你來挖掘。</p>
+<p>修煉的過程中，最好有人和你並肩而行，共同成長。歡迎你把這門課分享給你的朋友或同事，和他 / 她一起提升併發編程的功力。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+                            <a rel="next prefetch" href="02.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+                    <a rel="next prefetch" href="02.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

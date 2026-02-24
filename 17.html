@@ -1,0 +1,472 @@
+<!DOCTYPE HTML>
+<html lang="zh-TW" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>16 | Semaphore：一篇文章搞懂信號量 - Go 併發編程實戰課</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Go 併發編程實戰課</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="16--semaphore一篇文章搞懂信號量"><a class="header" href="#16--semaphore一篇文章搞懂信號量">16 | Semaphore：一篇文章搞懂信號量</a></h1>
+<p>你好，我是鳥窩。</p>
+<p>在前面的課程裡，我們學習了標準庫的併發原語、原子操作和 Channel，掌握了這些，你就可以解決 80% 的併發編程問題了。但是，如果你要想進一步提升你的併發編程能力，就需要學習一些第三方庫。</p>
+<p>所以，在接下來的幾節課裡，我會給你分享 Go 官方或者其他人提供的第三方庫，這節課我們先來學習信號量，信號量（Semaphore）是用來控制多個 goroutine 同時訪問多個資源的併發原語。</p>
+<h1 id="信號量是什麼都有什麼操作"><a class="header" href="#信號量是什麼都有什麼操作">信號量是什麼？都有什麼操作？</a></h1>
+<p>信號量的概念是荷蘭計算機科學家 Edsger Dijkstra 在 1963 年左右提出來的，廣泛應用在不同的操作系統中。在系統中，會給每一個進程一個信號量，代表每個進程目前的狀態。未得到控制權的進程，會在特定的地方被迫停下來，等待可以繼續進行的信號到來。</p>
+<p>最簡單的信號量就是一個變量加一些併發控制的能力，這個變量是 0 到 n 之間的一個數值。當 goroutine 完成對此信號量的等待（wait）時，該計數值就減 1，當 goroutine 完成對此信號量的釋放（release）時，該計數值就加 1。當計數值為 0 的時候，goroutine 調用 wait 等待該信號量是不會成功的，除非計數器又大於 0，等待的 goroutine 才有可能成功返回。</p>
+<p>更復雜的信號量類型，就是使用抽象數據類型代替變量，用來代表複雜的資源類型。實際上，大部分的信號量都使用一個整型變量來表示一組資源，並沒有實現太複雜的抽象數據類型，所以你只要知道有更復雜的信號量就行了，我們這節課主要是學習最簡單的信號量。</p>
+<p>說到這兒呢，我想借助一個生活中的例子，來幫你進一步理解信號量。</p>
+<p>舉個例子，圖書館新購買了 10 本《Go 併發編程的獨家秘籍》，有 1 萬個學生都想讀這本書，“僧多粥少”。所以，圖書館管理員先會讓這 1 萬個同學進行登記，按照登記的順序，借閱此書。如果書全部被借走，那麼，其他想看此書的同學就需要等待，如果有人還書了，圖書館管理員就會通知下一位同學來借閱這本書。這裡的資源是《Go 併發編程的獨家秘籍》這十本書，想讀此書的同學就是 goroutine，圖書管理員就是信號量。</p>
+<p>怎麼樣，現在是不是很好理解了？那麼，接下來，我們來學習下信號量的 P/V 操作。</p>
+<h2 id="pv-操作"><a class="header" href="#pv-操作">P/V 操作</a></h2>
+<p>Dijkstra 在他的論文中為信號量定義了兩個操作 P 和 V。P 操作（descrease、wait、acquire）是減少信號量的計數值，而 V 操作（increase、signal、release）是增加信號量的計數值。</p>
+<p>使用偽代碼表示如下（中括號代表原子操作）：</p>
+<pre><code>function V(semaphore S, integer I):
+    [S ← S + I]
+
+function P(semaphore S, integer I):
+    repeat:
+        [if S ≥ I:
+        S ← S − I
+        break]
+</code></pre>
+<p>可以看到，初始化信號量 S 有一個指定數量（<strong>n</strong>）的資源，它就像是一個有 n 個資源的池子。P 操作相當於請求資源，如果資源可用，就立即返回；如果沒有資源或者不夠，那麼，它可以不斷嘗試或者阻塞等待。V 操作會釋放自己持有的資源，把資源返還給信號量。信號量的值除了初始化的操作以外，只能由 P/V 操作改變。</p>
+<p>現在，我們來總結下信號量的實現。</p>
+<ol>
+<li>初始化信號量：設定初始的資源的數量。</li>
+<li>P 操作：將信號量的計數值減去 1，如果新值已經為負，那麼調用者會被阻塞並加入到等待隊列中。否則，調用者會繼續執行，並且獲得一個資源。</li>
+<li>V 操作：將信號量的計數值加 1，如果先前的計數值為負，就說明有等待的 P 操作的調用者。它會從等待隊列中取出一個等待的調用者，喚醒它，讓它繼續執行。</li>
+</ol>
+<p>講到這裡，我想再稍微說一個題外話，我們在第 2 講提到過飢餓，就是說在高併發的極端場景下，會有些 goroutine 始終搶不到鎖。為了處理飢餓的問題，你可以在等待隊列中做一些“文章”。比如實現一個優先級的隊列，或者先入先出的隊列，等等，保持公平性，並且照顧到優先級。</p>
+<p>在正式進入實現信號量的具體實現原理之前，我想先講一個知識點，就是信號量和互斥鎖的區別與聯繫，這有助於我們掌握接下來的內容。</p>
+<p>其實，信號量可以分為計數信號量（counting semaphre）和二進位信號量（binary semaphore）。剛剛所說的圖書館借書的例子就是一個計數信號量，它的計數可以是任意一個整數。在特殊的情況下，如果計數值只能是 0 或者 1，那麼，這個信號量就是二進位信號量，提供了互斥的功能（要麼是 0，要麼是 1），所以，有時候互斥鎖也會使用二進位信號量來實現。</p>
+<p>我們一般用信號量保護一組資源，比如數據庫連接池、一組客戶端的連接、幾個打印機資源，等等。如果信號量蛻變成二進位信號量，那麼，它的 P/V 就和互斥鎖的 Lock/Unlock 一樣了。</p>
+<p>有人會很細緻地區分二進位信號量和互斥鎖。比如說，有人提出，在 Windows 系統中，互斥鎖只能由持有鎖的線程釋放鎖，而二進位信號量則沒有這個限制（Stack Overflow上也有相關的討論）。實際上，雖然在 Windows 系統中，它們的確有些區別，但是對 Go 語言來說，互斥鎖也可以由非持有的 goroutine 來釋放，所以，從行為上來說，它們並沒有嚴格的區別。</p>
+<p>我個人認為，沒必要進行細緻的區分，因為互斥鎖並不是一個很嚴格的定義。實際在遇到互斥併發的問題時，我們一般選用互斥鎖。</p>
+<p>好了，言歸正傳，剛剛我們掌握了信號量的含義和具體操作方式，下面，我們就來具體瞭解下官方擴展庫的實現。</p>
+<h1 id="go-官方擴展庫的實現"><a class="header" href="#go-官方擴展庫的實現">Go 官方擴展庫的實現</a></h1>
+<p>在運行時，Go 內部使用信號量來控制 goroutine 的阻塞和喚醒。我們在學習基本併發原語的實現時也看到了，比如互斥鎖的第二個字段：</p>
+<pre><code>type Mutex struct {
+    state int32
+    sema  uint32
+}
+</code></pre>
+<p>信號量的 P/V 操作是通過函數實現的：</p>
+<pre><code>func runtime_Semacquire(s *uint32)
+func runtime_SemacquireMutex(s *uint32, lifo bool, skipframes int)
+func runtime_Semrelease(s *uint32, handoff bool, skipframes int)
+</code></pre>
+<p>遺憾的是，它是 Go 運行時內部使用的，並沒有封裝暴露成一個對外的信號量併發原語，原則上我們沒有辦法使用。不過沒關係，Go 在它的擴展包中提供了信號量semaphore，不過這個信號量的類型名並不叫 Semaphore，而是叫 Weighted。</p>
+<p>之所以叫做 Weighted，我想，應該是因為可以在初始化創建這個信號量的時候設置權重（初始化的資源數），其實我覺得叫 Semaphore 或許會更好。</p>
+<p><img src="./images/3eda6ab0f3945795e10b5ce8123b24dc.png" alt="" /></p>
+<p>我們來分析下這個信號量的幾個實現方法。</p>
+<ol>
+<li><strong>Acquire 方法</strong>：相當於 P 操作，你可以一次獲取多個資源，如果沒有足夠多的資源，調用者就會被阻塞。它的第一個參數是 Context，這就意味著，你可以通過 Context 增加超時或者 cancel 的機制。如果是正常獲取了資源，就返回 nil；否則，就返回 ctx.Err()，信號量不改變。</li>
+<li><strong>Release 方法</strong>：相當於 V 操作，可以將 n 個資源釋放，返還給信號量。</li>
+<li><strong>TryAcquire 方法</strong>：嘗試獲取 n 個資源，但是它不會阻塞，要麼成功獲取 n 個資源，返回 true，要麼一個也不獲取，返回 false。</li>
+</ol>
+<p>知道了信號量的實現方法，在實際的場景中，我們應該怎麼用呢？我來舉個 Worker Pool 的例子，來幫助你理解。</p>
+<p>我們創建和 CPU 核數一樣多的 Worker，讓它們去處理一個 4 倍數量的整數 slice。每個 Worker 一次只能處理一個整數，處理完之後，才能處理下一個。</p>
+<p>當然，這個問題的解決方案有很多種，這一次我們使用信號量，代碼如下：</p>
+<pre><code>var (
+    maxWorkers = runtime.GOMAXPROCS(0)                    // worker數量
+    sema       = semaphore.NewWeighted(int64(maxWorkers)) //信號量
+    task       = make([]int, maxWorkers*4)                // 任務數，是worker的四倍
+)
+
+func main() {
+    ctx := context.Background()
+
+    for i := range task {
+        // 如果沒有worker可用，會阻塞在這裡，直到某個worker被釋放
+        if err := sema.Acquire(ctx, 1); err != nil {
+            break
+        }
+
+        // 啟動worker goroutine
+        go func(i int) {
+            defer sema.Release(1)
+            time.Sleep(100 * time.Millisecond) // 模擬一個耗時操作
+            task[i] = i + 1
+        }(i)
+    }
+
+    // 請求所有的worker,這樣能確保前面的worker都執行完
+    if err := sema.Acquire(ctx, int64(maxWorkers)); err != nil {
+        log.Printf("獲取所有的worker失敗: %v", err)
+    }
+
+    fmt.Println(task)
+}
+</code></pre>
+<p>在這段代碼中，main goroutine 相當於一個 dispacher，負責任務的分發。它先請求信號量，如果獲取成功，就會啟動一個 goroutine 去處理計算，然後，這個 goroutine 會釋放這個信號量（有意思的是，信號量的獲取是在 main goroutine，信號量的釋放是在 worker goroutine 中），如果獲取不成功，就等到有信號量可以使用的時候，再去獲取。</p>
+<p>需要提醒你的是，其實，在這個例子中，還有一個值得我們學習的知識點，就是最後的那一段處理（第 25 行）。<strong>如果在實際應用中，你想等所有的 Worker 都執行完，就可以獲取最大計數值的信號量</strong>。</p>
+<p>Go 擴展庫中的信號量是使用互斥鎖 +List 實現的。互斥鎖實現其它字段的保護，而 List 實現了一個等待隊列，等待者的通知是通過 Channel 的通知機制實現的。</p>
+<p>我們來看一下信號量 Weighted 的數據結構：</p>
+<pre><code>type Weighted struct {
+    size    int64         // 最大資源數
+    cur     int64         // 當前已被使用的資源
+    mu      sync.Mutex    // 互斥鎖，對字段的保護
+    waiters list.List     // 等待隊列
+}
+</code></pre>
+<p>在信號量的幾個實現方法裡，Acquire 是代碼最複雜的一個方法，它不僅僅要監控資源是否可用，而且還要檢測 Context 的 Done 是否已關閉。我們來看下它的實現代碼。</p>
+<pre><code>func (s *Weighted) Acquire(ctx context.Context, n int64) error {
+    s.mu.Lock()
+        // fast path, 如果有足夠的資源，都不考慮ctx.Done的狀態，將cur加上n就返回
+    if s.size-s.cur &gt;= n &amp;&amp; s.waiters.Len() == 0 {
+      s.cur += n
+      s.mu.Unlock()
+      return nil
+    }
+  
+        // 如果是不可能完成的任務，請求的資源數大於能提供的最大的資源數
+    if n &gt; s.size {
+      s.mu.Unlock()
+            // 依賴ctx的狀態返回，否則一直等待
+      &lt;-ctx.Done()
+      return ctx.Err()
+    }
+  
+        // 否則就需要把調用者加入到等待隊列中
+        // 創建了一個ready chan,以便被通知喚醒
+    ready := make(chan struct{})
+    w := waiter{n: n, ready: ready}
+    elem := s.waiters.PushBack(w)
+    s.mu.Unlock()
+  
+
+        // 等待
+    select {
+    case &lt;-ctx.Done(): // context的Done被關閉
+      err := ctx.Err()
+      s.mu.Lock()
+      select {
+      case &lt;-ready: // 如果被喚醒了，忽略ctx的狀態
+        err = nil
+      default: 通知waiter
+        isFront := s.waiters.Front() == elem
+        s.waiters.Remove(elem)
+        // 通知其它的waiters,檢查是否有足夠的資源
+        if isFront &amp;&amp; s.size &gt; s.cur {
+          s.notifyWaiters()
+        }
+      }
+      s.mu.Unlock()
+      return err
+    case &lt;-ready: // 被喚醒了
+      return nil
+    }
+  }
+</code></pre>
+<p>其實，為了提高性能，這個方法中的 fast path 之外的代碼，可以抽取成 acquireSlow 方法，以便其它 Acquire 被內聯。</p>
+<p>Release 方法將當前計數值減去釋放的資源數 n，並喚醒等待隊列中的調用者，看是否有足夠的資源被獲取。</p>
+<pre><code>func (s *Weighted) Release(n int64) {
+    s.mu.Lock()
+    s.cur -= n
+    if s.cur &lt; 0 {
+      s.mu.Unlock()
+      panic("semaphore: released more than held")
+    }
+    s.notifyWaiters()
+    s.mu.Unlock()
+}
+</code></pre>
+<p>notifyWaiters 方法就是逐個檢查等待的調用者，如果資源不夠，或者是沒有等待者了，就返回：</p>
+<pre><code>func (s *Weighted) notifyWaiters() {
+    for {
+      next := s.waiters.Front()
+      if next == nil {
+        break // No more waiters blocked.
+      }
+  
+
+      w := next.Value.(waiter)
+      if s.size-s.cur &lt; w.n {
+        //避免飢餓，這裡還是按照先入先出的方式處理
+        break
+      }
+
+      s.cur += w.n
+      s.waiters.Remove(next)
+      close(w.ready)
+    }
+  }
+</code></pre>
+<p>notifyWaiters 方法是按照先入先出的方式喚醒調用者。當釋放 100 個資源的時候，如果第一個等待者需要 101 個資源，那麼，隊列中的所有等待者都會繼續等待，即使有的等待者只需要 1 個資源。這樣做的目的是避免飢餓，否則的話，資源可能總是被那些請求資源數小的調用者獲取，這樣一來，請求資源數巨大的調用者，就沒有機會獲得資源了。</p>
+<p>好了，到這裡，你就知道了官方擴展庫的信號量實現方法，接下來你就可以使用信號量了。不過，在此之前呢，我想給你講幾個使用時的常見錯誤。這部分內容可是幫助你避坑的，我建議你好好學習。</p>
+<h1 id="使用信號量的常見錯誤"><a class="header" href="#使用信號量的常見錯誤">使用信號量的常見錯誤</a></h1>
+<p>保證信號量不出錯的前提是正確地使用它，否則，公平性和安全性就會受到損害，導致程序 panic。</p>
+<p>在使用信號量時，最常見的幾個錯誤如下：</p>
+<ol>
+<li>請求了資源，但是忘記釋放它；</li>
+<li>釋放了從未請求的資源；</li>
+<li>長時間持有一個資源，即使不需要它；</li>
+<li>不持有一個資源，卻直接使用它。</li>
+</ol>
+<p>不過，即使你規避了這些坑，在同時使用多種資源，不同的信號量控制不同的資源的時候，也可能會出現死鎖現象，比如哲學家就餐問題。</p>
+<p>就 Go 擴展庫實現的信號量來說，在調用 Release 方法的時候，你可以傳遞任意的整數。但是，如果你傳遞一個比請求到的數量大的錯誤的數值，程序就會 panic。如果傳遞一個負數，會導致資源永久被持有。如果你請求的資源數比最大的資源數還大，那麼，調用者可能永遠被阻塞。</p>
+<p>所以，<strong>使用信號量遵循的原則就是請求多少資源，就釋放多少資源</strong>。你一定要注意，必須使用正確的方法傳遞整數，不要“耍小聰明”，而且，請求的資源數一定不要超過最大資源數。</p>
+<h1 id="其它信號量的實現"><a class="header" href="#其它信號量的實現">其它信號量的實現</a></h1>
+<p>除了官方擴展庫的實現，實際上，我們還有很多方法實現信號量，比較典型的就是使用 Channel 來實現。</p>
+<p>根據之前的 Channel 類型的介紹以及 Go 內存模型的定義，你應該能想到，使用一個 buffer 為 n 的 Channel 很容易實現信號量，比如下面的代碼，我們就是使用 chan struct{}類型來實現的。</p>
+<p>在初始化這個信號量的時候，我們設置它的初始容量，代表有多少個資源可以使用。它使用 Lock 和 Unlock 方法實現請求資源和釋放資源，正好實現了 Locker 接口。</p>
+<pre><code>  // Semaphore 數據結構，並且還實現了Locker接口
+  type semaphore struct {
+    sync.Locker
+    ch chan struct{}
+  }
+  
+  // 創建一個新的信號量
+  func NewSemaphore(capacity int) sync.Locker {
+    if capacity &lt;= 0 {
+      capacity = 1 // 容量為1就變成了一個互斥鎖
+    }
+    return &amp;semaphore{ch: make(chan struct{}, capacity)}
+  }
+  
+  // 請求一個資源
+  func (s *semaphore) Lock() {
+    s.ch &lt;- struct{}{}
+  }
+  
+  // 釋放資源
+  func (s *semaphore) Unlock() {
+    &lt;-s.ch
+  }
+</code></pre>
+<p>當然，你還可以自己擴展一些方法，比如在請求資源的時候使用 Context 參數（Acquire(ctx)）、實現 TryLock 等功能。</p>
+<p>看到這裡，你可能會問，這個信號量的實現看起來非常簡單，而且也能應對大部分的信號量的場景，為什麼官方擴展庫的信號量的實現不採用這種方法呢？其實，具體是什麼原因，我也不知道，但是我必須要強調的是，官方的實現方式有這樣一個功能：<strong>它可以一次請求多個資源，這是通過 Channel 實現的信號量所不具備的</strong>。</p>
+<p>除了 Channel，marusama/semaphore也實現了一個可以動態更改資源容量的信號量，也是一個非常有特色的實現。如果你的資源數量並不是固定的，而是動態變化的，我建議你考慮一下這個信號量庫。</p>
+<h1 id="總結"><a class="header" href="#總結">總結</a></h1>
+<p>這是一個很奇怪的現象：標準庫中實現基本併發原語（比如 Mutex）的時候，強烈依賴信號量實現等待隊列和通知喚醒，但是，標準庫中卻沒有把這個實現直接暴露出來放到標準庫，而是通過第三庫提供。</p>
+<p>不管怎樣，信號量這個併發原語在多資源共享的併發控制的場景中被廣泛使用，有時候也會被 Channel 類型所取代，因為一個 buffered chan 也可以代表 n 個資源。</p>
+<p>但是，官方擴展的信號量也有它的優勢，就是可以一次獲取多個資源。<strong>在批量獲取資源的場景中，我建議你嘗試使用官方擴展的信號量</strong>。</p>
+<p><img src="./images/47eedff8e99262d662018f59020f1e36.png" alt="" /></p>
+<h1 id="思考題"><a class="header" href="#思考題">思考題</a></h1>
+<ol>
+<li>你能用 Channel 實現信號量併發原語嗎？你能想到幾種實現方式？</li>
+<li>為什麼信號量的資源數設計成 int64 而不是 uint64 呢？</li>
+</ol>
+<p>歡迎在留言區寫下你的思考和答案，我們一起交流討論。如果你覺得有所收穫，也歡迎你把今天的內容分享給你的朋友或同事。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="16.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="18.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="16.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="18.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

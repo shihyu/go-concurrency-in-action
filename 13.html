@@ -1,0 +1,467 @@
+<!DOCTYPE HTML>
+<html lang="zh-TW" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>12 | atomic：要保證原子操作，一定要使用這幾種方法 - Go 併發編程實戰課</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Go 併發編程實戰課</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="12--atomic要保證原子操作一定要使用這幾種方法"><a class="header" href="#12--atomic要保證原子操作一定要使用這幾種方法">12 | atomic：要保證原子操作，一定要使用這幾種方法</a></h1>
+<p>你好，我是鳥窩。</p>
+<p>前面我們在學習 Mutex、RWMutex 等併發原語的實現時，你可以看到，最底層是通過 atomic 包中的一些原子操作來實現的。當時，為了讓你的注意力集中在這些原語的功能實現上，我並沒有展開介紹這些原子操作是幹什麼用的。</p>
+<p>你可能會說，這些併發原語已經可以應對大多數的併發場景了，為啥還要學習原子操作呢？其實，這是因為，在很多場景中，使用併發原語實現起來比較複雜，而原子操作可以幫助我們更輕鬆地實現底層的優化。</p>
+<p>所以，現在，我會專門用一節課，帶你仔細地瞭解一下什麼是原子操作，atomic 包都提供了哪些實現原子操作的方法。另外，我還會帶你實現一個基於原子操作的數據結構。好了，接下來我們先來學習下什麼是原子操作。</p>
+<h1 id="原子操作的基礎知識"><a class="header" href="#原子操作的基礎知識">原子操作的基礎知識</a></h1>
+<p>Package sync/atomic 實現了同步算法底層的原子的內存操作原語，我們把它叫做原子操作原語，它提供了一些實現原子操作的方法。</p>
+<p>之所以叫原子操作，是因為一個原子在執行的時候，其它線程不會看到執行一半的操作結果。在其它線程看來，原子操作要麼執行完了，要麼還沒有執行，就像一個最小的粒子 - 原子一樣，不可分割。</p>
+<p>CPU 提供了基礎的原子操作，不過，不同架構的系統的原子操作是不一樣的。</p>
+<p>對於單處理器單核系統來說，如果一個操作是由一個 CPU 指令來實現的，那麼它就是原子操作，比如它的 XCHG 和 INC 等指令。如果操作是基於多條指令來實現的，那麼，執行的過程中可能會被中斷，並執行上下文切換，這樣的話，原子性的保證就被打破了，因為這個時候，操作可能只執行了一半。</p>
+<p>在多處理器多核系統中，原子操作的實現就比較複雜了。</p>
+<p>由於 cache 的存在，單個核上的單個指令進行原子操作的時候，你要確保其它處理器或者核不訪問此原子操作的地址，或者是確保其它處理器或者核總是訪問原子操作之後的最新的值。x86 架構中提供了指令前綴 LOCK，LOCK 保證了指令（比如 LOCK CMPXCHG op1、op2）不會受其它處理器或 CPU 核的影響，有些指令（比如 XCHG）本身就提供 Lock 的機制。不同的 CPU 架構提供的原子操作指令的方式也是不同的，比如對於多核的 MIPS 和 ARM，提供了 LL/SC（Load Link/Store Conditional）指令，可以幫助實現原子操作（ARMLL/SC 指令 LDREX 和 STREX）。</p>
+<p><strong>因為不同的 CPU 架構甚至不同的版本提供的原子操作的指令是不同的，所以，要用一種編程語言實現支持不同架構的原子操作是相當有難度的</strong>。不過，還好這些都不需要你操心，因為 Go 提供了一個通用的原子操作的 API，將更底層的不同的架構下的實現封裝成 atomic 包，提供了修改類型的原子操作（atomic read-modify-write，RMW）和加載存儲類型的原子操作（Load 和 Store）的 API，稍後我會一一介紹。</p>
+<p>有的代碼也會因為架構的不同而不同。有時看起來貌似一個操作是原子操作，但實際上，對於不同的架構來說，情況是不一樣的。比如下面的代碼的第 4 行，是將一個 64 位的值賦值給變量 i：</p>
+<pre><code>const x int64 = 1 + 1&lt;&lt;33
+
+func main() {
+    var i = x
+    _ = i
+}
+</code></pre>
+<p>如果你使用 GOARCH=386 的架構去編譯這段代碼，那麼，第 5 行其實是被拆成了兩個指令，分別操作低 32 位和高 32 位（使用 GOARCH=386 go tool compile -N -l test.go；GOARCH=386 go tool objdump -gnu test.o 反編譯試試）：</p>
+<p><img src="./images/5b193054158f2a645beeeb82220b95b3.png" alt="" /></p>
+<p>如果 GOARCH=amd64 的架構去編譯這段代碼，那麼，第 5 行其中的賦值操作其實是一條指令：</p>
+<p><img src="./images/13a91d5dc292d1d733761fc654ca7efd.png" alt="" /></p>
+<p>所以，如果要想保證原子操作，切記一定要使用 atomic 提供的方法。</p>
+<p>好了，瞭解了什麼是原子操作以及不同系統的不同原子操作，接下來，我來介紹下 atomic 原子操作的應用場景。</p>
+<h1 id="atomic-原子操作的應用場景"><a class="header" href="#atomic-原子操作的應用場景">atomic 原子操作的應用場景</a></h1>
+<p>開篇我說過，使用 atomic 的一些方法，我們可以實現更底層的一些優化。如果使用 Mutex 等併發原語進行這些優化，雖然可以解決問題，但是這些併發原語的實現邏輯比較複雜，對性能還是有一定的影響的。</p>
+<p>舉個例子：假設你想在程序中使用一個標誌（flag，比如一個 bool 類型的變量），來標識一個定時任務是否已經啟動執行了，你會怎麼做呢？</p>
+<p>我們先來看看加鎖的方法。如果使用 Mutex 和 RWMutex，在讀取和設置這個標誌的時候加鎖，是可以做到互斥的、保證同一時刻只有一個定時任務在執行的，所以使用 Mutex 或者 RWMutex 是一種解決方案。</p>
+<p>其實，這個場景中的問題不涉及到對資源複雜的競爭邏輯，只是會併發地讀寫這個標誌，這類場景就適合使用 atomic 的原子操作。具體怎麼做呢？你可以使用一個 uint32 類型的變量，如果這個變量的值是 0，就標識沒有任務在執行，如果它的值是 1，就標識已經有任務在完成了。你看，是不是很簡單呢？</p>
+<p>再來看一個例子。假設你在開發應用程序的時候，需要從配置服務器中讀取一個節點的配置信息。而且，在這個節點的配置發生變更的時候，你需要重新從配置服務器中拉取一份新的配置並更新。你的程序中可能有多個 goroutine 都依賴這份配置，涉及到對這個配置對象的併發讀寫，你可以使用讀寫鎖實現對配置對象的保護。在大部分情況下，你也可以利用 atomic 實現配置對象的更新和加載。</p>
+<p>分析到這裡，可以看到，這兩個例子都可以使用基本併發原語來實現的，只不過，我們不需要這些基本併發原語裡面的複雜邏輯，而是隻需要其中的簡單原子操作，所以，這些場景可以直接使用 atomic 包中的方法去實現。</p>
+<p><strong>有時候，你也可以使用 atomic 實現自己定義的基本併發原語</strong>，比如 Go issue 有人提議的 CondMutex、Mutex.LockContext、WaitGroup.Go 等，我們可以使用 atomic 或者基於它的更高一級的併發原語去實現。我先前講的幾種基本併發原語的底層（比如 Mutex），就是基於通過 atomic 的方法實現的。</p>
+<p>除此之外，atomic 原子操作還是實現 lock-free 數據結構的基石。</p>
+<p>在實現 lock-free 的數據結構時，我們可以不使用互斥鎖，這樣就不會讓線程因為等待互斥鎖而阻塞休眠，而是讓線程保持繼續處理的狀態。另外，不使用互斥鎖的話，lock-free 的數據結構還可以提供併發的性能。</p>
+<p>不過，lock-free 的數據結構實現起來比較複雜，需要考慮的東西很多，有興趣的同學可以看一位微軟專家寫的一篇經驗分享：Lockless Programming Considerations for Xbox 360 and Microsoft Windows，這裡我們不細談了。不過，這節課的最後我會帶你開發一個 lock-free 的 queue，來學習下使用 atomic 操作實現 lock-free 數據結構的方法，你可以拿它和使用互斥鎖實現的 queue 做性能對比，看看在性能上是否有所提升。</p>
+<p>看到這裡，你是不是覺得 atomic 非常重要呢？不過，要想能夠靈活地應用 atomic，我們首先得知道 atomic 提供的所有方法。</p>
+<h1 id="atomic-提供的方法"><a class="header" href="#atomic-提供的方法">atomic 提供的方法</a></h1>
+<p>目前的 Go 的泛型的特性還沒有發佈，Go 的標準庫中的很多實現會顯得非常囉嗦，多個類型會實現很多類似的方法，尤其是 atomic 包，最為明顯。相信泛型支持之後，atomic 的 API 會清爽很多。</p>
+<p>atomic 為了支持 int32、int64、uint32、uint64、uintptr、Pointer（Add 方法不支持）類型，分別提供了 AddXXX、CompareAndSwapXXX、SwapXXX、LoadXXX、StoreXXX 等方法。不過，你也不要擔心，你只要記住了一種數據類型的方法的意義，其它數據類型的方法也是一樣的。</p>
+<p>關於 atomic，還有一個地方你一定要記住，<strong>atomic 操作的對象是一個地址，你需要把可尋址的變量的地址作為參數傳遞給方法，而不是把變量的值傳遞給方法</strong>。</p>
+<p>好了，下面我就來給你介紹一下 atomic 提供的方法。掌握了這些，你就可以說完全掌握了 atomic 包。</p>
+<h2 id="add"><a class="header" href="#add">Add</a></h2>
+<p>首先，我們來看 Add 方法的簽名：</p>
+<p><img src="./images/4170b71547faa59d29d21cd53bdaa6bf.png" alt="" /></p>
+<p>其實，Add 方法就是給第一個參數地址中的值增加一個 delta 值。</p>
+<p>對於有符號的整數來說，delta 可以是一個負數，相當於減去一個值。對於無符號的整數和 uinptr 類型來說，怎麼實現減去一個值呢？畢竟，atomic 並沒有提供單獨的減法操作。</p>
+<p>我來跟你說一種方法。你可以利用計算機補碼的規則，把減法變成加法。以 uint32 類型為例：</p>
+<pre><code>AddUint32(&amp;x, ^uint32(c-1)).
+</code></pre>
+<p>如果是對 uint64 的值進行操作，那麼，就把上面的代碼中的 uint32 替換成 uint64。</p>
+<p>尤其是減 1 這種特殊的操作，我們可以簡化為：</p>
+<pre><code>AddUint32(&amp;x, ^uint32(0))
+</code></pre>
+<p>好了，我們再來看看 CAS 方法。</p>
+<h2 id="cas-compareandswap"><a class="header" href="#cas-compareandswap">CAS （CompareAndSwap）</a></h2>
+<p>以 int32 為例，我們學習一下 CAS 提供的功能。在 CAS 的方法簽名中，需要提供要操作的地址、原數據值、新值，如下所示：</p>
+<pre><code>func CompareAndSwapInt32(addr *int32, old, new int32) (swapped bool)
+</code></pre>
+<p>我們來看下這個方法的功能。</p>
+<p>這個方法會比較當前 addr 地址裡的值是不是 old，如果不等於 old，就返回 false；如果等於 old，就把此地址的值替換成 new 值，返回 true。這就相當於“判斷相等才替換”。</p>
+<p>如果使用偽代碼來表示這個原子操作，代碼如下：</p>
+<pre><code>if *addr == old {
+  *addr = new
+  return true
+}
+return false
+</code></pre>
+<p>它支持的類型和方法如圖所示：</p>
+<p><img src="./images/de6d354f350b6eb983dcc3f17b87bbb4.png" alt="" /></p>
+<h2 id="swap"><a class="header" href="#swap">Swap</a></h2>
+<p>如果不需要比較舊值，只是比較粗暴地替換的話，就可以使用 Swap 方法，它替換後還可以返回舊值，偽代碼如下：</p>
+<pre><code>old = *addr
+*addr = new
+return old
+</code></pre>
+<p>它支持的數據類型和方法如圖所示：</p>
+<p><img src="./images/5b9745467457b6af711d236317ecf226.png" alt="" /></p>
+<h2 id="load"><a class="header" href="#load">Load</a></h2>
+<p>Load 方法會取出 addr 地址中的值，即使在多處理器、多核、有 CPU cache 的情況下，這個操作也能保證 Load 是一個原子操作。</p>
+<p>它支持的數據類型和方法如圖所示：</p>
+<p><img src="./images/1417b6be3516542b8d4d475b905e1283.png" alt="" /></p>
+<h2 id="store"><a class="header" href="#store">Store</a></h2>
+<p>Store 方法會把一個值存入到指定的 addr 地址中，即使在多處理器、多核、有 CPU cache 的情況下，這個操作也能保證 Store 是一個原子操作。別的 goroutine 通過 Load 讀取出來，不會看到存取了一半的值。</p>
+<p>它支持的數據類型和方法如圖所示：</p>
+<p><img src="./images/c1738c351948a98a88ef7457126156ce.png" alt="" /></p>
+<h2 id="value-類型"><a class="header" href="#value-類型">Value 類型</a></h2>
+<p>剛剛說的都是一些比較常見的類型，其實，atomic 還提供了一個特殊的類型：Value。它可以原子地存取對象類型，但也只能存取，不能 CAS 和 Swap，常常用在配置變更等場景中。</p>
+<p><img src="./images/50e77b6214b543a4048549b7d0481312.png" alt="" /></p>
+<p>接下來，我以一個配置變更的例子，來演示 Value 類型的使用。這裡定義了一個 Value 類型的變量 config， 用來存儲配置信息。</p>
+<p>首先，我們啟動一個 goroutine，然後讓它隨機 sleep 一段時間，之後就變更一下配置，並通過我們前面學到的 Cond 併發原語，通知其它的 reader 去加載新的配置。</p>
+<p>接下來，我們啟動一個 goroutine 等待配置變更的信號，一旦有變更，它就會加載最新的配置。</p>
+<p>通過這個例子，你可以瞭解到 Value 的 Store/Load 方法的使用，因為它只有這兩個方法，只要掌握了它們的使用，你就完全掌握了 Value 類型。</p>
+<pre><code>type Config struct {
+    NodeName string
+    Addr     string
+    Count    int32
+}
+
+func loadNewConfig() Config {
+    return Config{
+        NodeName: "北京",
+        Addr:     "10.77.95.27",
+        Count:    rand.Int31(),
+    }
+}
+func main() {
+    var config atomic.Value
+    config.Store(loadNewConfig())
+    var cond = sync.NewCond(&amp;sync.Mutex{})
+
+    // 設置新的config
+    go func() {
+        for {
+            time.Sleep(time.Duration(5+rand.Int63n(5)) * time.Second)
+            config.Store(loadNewConfig())
+            cond.Broadcast() // 通知等待著配置已變更
+        }
+    }()
+
+    go func() {
+        for {
+            cond.L.Lock()
+            cond.Wait()                 // 等待變更信號
+            c := config.Load().(Config) // 讀取新的配置
+            fmt.Printf("new config: %+v\n", c)
+            cond.L.Unlock()
+        }
+    }()
+
+    select {}
+}
+</code></pre>
+<p>好了，關於標準庫的 atomic 提供的方法，到這裡我們就學完了。事實上，atomic 包提供了非常好的支持各種平臺的一致性的 API，絕大部分項目都是直接使用它。接下來，我再給你介紹一下第三方庫，幫助你稍微開拓一下思維。</p>
+<h1 id="第三方庫的擴展"><a class="header" href="#第三方庫的擴展">第三方庫的擴展</a></h1>
+<p>其實，atomic 的 API 已經算是很簡單的了，它提供了包一級的函數，可以對幾種類型的數據執行原子操作。</p>
+<p>不過有一點讓人覺得不爽的是，或者是讓熟悉面向對象編程的程序員不爽的是，函數調用有一點點麻煩。所以，有些人就對這些函數做了進一步的包裝，跟 atomic 中的 Value 類型類似，這些類型也提供了面向對象的使用方式，比如關注度比較高的uber-go/atomic，它定義和封裝了幾種與常見類型相對應的原子操作類型，這些類型提供了原子操作的方法。這些類型包括 Bool、Duration、Error、Float64、Int32、Int64、String、Uint32、Uint64 等。</p>
+<p>比如 Bool 類型，提供了 CAS、Store、Swap、Toggle 等原子方法，還提供 String、MarshalJSON、UnmarshalJSON 等輔助方法，確實是一個精心設計的 atomic 擴展庫。關於這些方法，你一看名字就能猜出來它們的功能，我就不多說了。</p>
+<p>其它的數據類型也和 Bool 類型相似，使用起來就像面向對象的編程一樣，你可以看下下面的這段代碼。</p>
+<pre><code>    var running atomic.Bool
+    running.Store(true)
+    running.Toggle()
+    fmt.Println(running.Load()) // false使用 atomic 實現 Lock-Free queueatomic 常常用來實現 Lock-Free 的數據結構，這次我會給你展示一個 Lock-Free queue 的實現。
+</code></pre>
+<p>Lock-Free queue 最出名的就是 Maged M. Michael 和 Michael L. Scott 1996 年發表的論文中的算法，算法比較簡單，容易實現，偽代碼的每一行都提供了註釋，我就不在這裡貼出偽代碼了，因為我們使用 Go 實現這個數據結構的代碼幾乎和偽代碼一樣：</p>
+<pre><code>package queue
+import (
+  "sync/atomic"
+  "unsafe"
+)
+// lock-free的queue
+type LKQueue struct {
+  head unsafe.Pointer
+  tail unsafe.Pointer
+}
+// 通過鏈表實現，這個數據結構代表鏈表中的節點
+type node struct {
+  value interface{}
+  next  unsafe.Pointer
+}
+func NewLKQueue() *LKQueue {
+  n := unsafe.Pointer(&amp;node{})
+  return &amp;LKQueue{head: n, tail: n}
+}
+// 入隊
+func (q *LKQueue) Enqueue(v interface{}) {
+  n := &amp;node{value: v}
+  for {
+    tail := load(&amp;q.tail)
+    next := load(&amp;tail.next)
+    if tail == load(&amp;q.tail) { // 尾還是尾
+      if next == nil { // 還沒有新數據入隊
+        if cas(&amp;tail.next, next, n) { //增加到隊尾
+          cas(&amp;q.tail, tail, n) //入隊成功，移動尾巴指針
+          return
+        }
+      } else { // 已有新數據加到隊列後面，需要移動尾指針
+        cas(&amp;q.tail, tail, next)
+      }
+    }
+  }
+}
+// 出隊，沒有元素則返回nil
+func (q *LKQueue) Dequeue() interface{} {
+  for {
+    head := load(&amp;q.head)
+    tail := load(&amp;q.tail)
+    next := load(&amp;head.next)
+    if head == load(&amp;q.head) { // head還是那個head
+      if head == tail { // head和tail一樣
+        if next == nil { // 說明是空隊列
+          return nil
+        }
+        // 只是尾指針還沒有調整，嘗試調整它指向下一個
+        cas(&amp;q.tail, tail, next)
+      } else {
+        // 讀取出隊的數據
+        v := next.value
+                // 既然要出隊了，頭指針移動到下一個
+        if cas(&amp;q.head, head, next) {
+          return v // Dequeue is done.  return
+        }
+      }
+    }
+  }
+}
+
+// 將unsafe.Pointer原子加載轉換成node
+func load(p *unsafe.Pointer) (n *node) {
+  return (*node)(atomic.LoadPointer(p))
+}
+
+// 封裝CAS,避免直接將*node轉換成unsafe.Pointer
+func cas(p *unsafe.Pointer, old, new *node) (ok bool) {
+  return atomic.CompareAndSwapPointer(
+    p, unsafe.Pointer(old), unsafe.Pointer(new))
+}
+</code></pre>
+<p>我來給你介紹下這裡的主要邏輯。</p>
+<p>這個 lock-free 的實現使用了一個輔助頭指針（head），頭指針不包含有意義的數據，只是一個輔助的節點，這樣的話，出隊入隊中的節點會更簡單。</p>
+<p>入隊的時候，通過 CAS 操作將一個元素添加到隊尾，並且移動尾指針。</p>
+<p>出隊的時候移除一個節點，並通過 CAS 操作移動 head 指針，同時在必要的時候移動尾指針。</p>
+<h1 id="總結"><a class="header" href="#總結">總結</a></h1>
+<p>好了，我們來小結一下。這節課，我們學習了 atomic 的基本使用方法，以及它提供的幾種方法，包括 Add、CAS、Swap、Load、Store、Value 類型。除此之外，我還介紹了一些第三方庫，並且帶你實現了 Lock-free queue。到這裡，相信你已經掌握了 atomic 提供的各種方法，並且能夠應用到實踐中了。</p>
+<p>最後，我還想和你討論一個額外的問題：對一個地址的賦值是原子操作嗎？</p>
+<p>這是一個很有趣的問題，如果是原子操作，還要 atomic 包乾什麼？官方的文檔中並沒有特意的介紹，不過，在一些 issue 或者論壇中，每當有人談到這個問題時，總是會被建議用 atomic 包。</p>
+<p>Dave Cheney就談到過這個問題，講得非常好。我來給你總結一下他講的知識點，這樣你就比較容易理解使用 atomic 和直接內存操作的區別了。</p>
+<p>在現在的系統中，write 的地址基本上都是對齊的（aligned）。 比如，32 位的操作系統、CPU 以及編譯器，write 的地址總是 4 的倍數，64 位的系統總是 8 的倍數（還記得 WaitGroup 針對 64 位系統和 32 位系統對 state1 的字段不同的處理嗎）。對齊地址的寫，不會導致其他人看到只寫了一半的數據，因為它通過一個指令就可以實現對地址的操作。如果地址不是對齊的話，那麼，處理器就需要分成兩個指令去處理，如果執行了一個指令，其它人就會看到更新了一半的錯誤的數據，這被稱做撕裂寫（torn write） 。所以，你可以認為賦值操作是一個原子操作，這個“原子操作”可以認為是保證數據的完整性。</p>
+<p>但是，對於現代的多處理多核的系統來說，由於 cache、指令重排，可見性等問題，我們對原子操作的意義有了更多的追求。在多核系統中，一個核對地址的值的更改，在更新到主內存中之前，是在多級緩存中存放的。這時，多個核看到的數據可能是不一樣的，其它的核可能還沒有看到更新的數據，還在使用舊的數據。</p>
+<p>多處理器多核心繫統為了處理這類問題，使用了一種叫做內存屏障（memory fence 或 memory barrier）的方式。一個寫內存屏障會告訴處理器，必須要等到它管道中的未完成的操作（特別是寫操作）都被刷新到內存中，再進行操作。此操作還會讓相關的處理器的 CPU 緩存失效，以便讓它們從主存中拉取最新的值。</p>
+<p>atomic 包提供的方法會提供內存屏障的功能，所以，atomic 不僅僅可以保證賦值的數據完整性，還能保證數據的可見性，一旦一個核更新了該地址的值，其它處理器總是能讀取到它的最新值。但是，需要注意的是，因為需要處理器之間保證數據的一致性，atomic 的操作也是會降低性能的。</p>
+<p><img src="./images/7e6f43bc405a39f1b651cee6dbf2eaac.png" alt="" /></p>
+<h1 id="思考題"><a class="header" href="#思考題">思考題</a></h1>
+<p>atomic.Value 只有 Load/Store 方法，你是不是感覺意猶未盡？你可以嘗試為 Value 類型增加 Swap 和 CompareAndSwap 方法（可以參考一下這份資料）。</p>
+<p>歡迎在留言區寫下你的思考和答案，我們一起交流討論。如果你覺得有所收穫，也歡迎你把今天的內容分享給你的朋友或同事。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="12.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="14.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="12.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="14.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
