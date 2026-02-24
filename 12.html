@@ -188,7 +188,7 @@
 <p>Go 在 1.7 的版本中才正式把 Context 加入到標準庫中。在這之前，很多 Web 框架在定義自己的 handler 時，都會傳遞一個自定義的 Context，把客戶端的信息和客戶端的請求信息放入到 Context 中。Go 最初提供了 golang.org/x/net/context 庫用來提供上下文信息，最終還是在 Go1.7 中把此庫提升到標準庫 context 包中。</p>
 <p>為啥呢？這是因為，在 Go1.7 之前，有很多庫都依賴 golang.org/x/net/context 中的 Context 實現，這就導致 Go 1.7 發佈之後，出現了標準庫 Context 和 golang.org/x/net/context 並存的狀況。新的代碼使用標準庫 Context 的時候，沒有辦法使用這個標準庫的 Context 去調用舊有的使用 x/net/context 實現的方法。</p>
 <p>所以，在 Go1.9 中，還專門實現了一個叫做 type alias 的新特性，然後把 x/net/context 中的 Context 定義成標準庫 Context 的別名，以解決新舊 Context 類型衝突問題，你可以看一下下面這段代碼：</p>
-<pre><code>    // +build go1.9
+<pre><code class="language-go">    // +build go1.9
   package context
   
   import "context"
@@ -217,7 +217,7 @@
 <h1 id="context-基本使用方法"><a class="header" href="#context-基本使用方法">Context 基本使用方法</a></h1>
 <p>首先，我們來學習一下 Context 接口包含哪些方法，這些方法都是幹什麼用的。</p>
 <p>包 context 定義了 Context 接口，Context 的具體實現包括 4 個方法，分別是 Deadline、Done、Err 和 Value，如下所示：</p>
-<pre><code>type Context interface {
+<pre><code class="language-go">type Context interface {
     Deadline() (deadline time.Time, ok bool)
     Done() &lt;-chan struct{}
     Err() error
@@ -235,7 +235,7 @@
 <li>context.TODO()：返回一個非 nil 的、空的 Context，沒有任何值，不會被 cancel，不會超時，沒有截止日期。當你不清楚是否該用 Context，或者目前還不知道要傳遞一些什麼上下文信息的時候，就可以使用這個方法。</li>
 </ol>
 <p>官方文檔是這麼講的，你可能會覺得像沒說一樣，因為界限並不是很明顯。其實，你根本不用費腦子去考慮，可以直接使用 context.Background。事實上，它們兩個底層的實現是一模一樣的：</p>
-<pre><code>var (
+<pre><code class="language-go">var (
     background = new(emptyCtx)
     todo       = new(emptyCtx)
 )
@@ -262,14 +262,14 @@ func TODO() Context {
 <h2 id="withvalue"><a class="header" href="#withvalue">WithValue</a></h2>
 <p>WithValue 基於 parent Context 生成一個新的 Context，保存了一個 key-value 鍵值對。它常常用來傳遞上下文。</p>
 <p>WithValue 方法其實是創建了一個類型為 valueCtx 的 Context，它的類型定義如下：</p>
-<pre><code>type valueCtx struct {
+<pre><code class="language-go">type valueCtx struct {
     Context
     key, val interface{}
 }
 </code></pre>
 <p>它持有一個 key-value 鍵值對，還持有 parent 的 Context。它覆蓋了 Value 方法，優先從自己的存儲中檢查這個 key，不存在的話會從 parent 中繼續檢查。</p>
 <p>Go 標準庫實現的 Context 還實現了鏈式查找。如果不存在，還會向 parent Context 去查找，如果 parent 還是 valueCtx 的話，還是遵循相同的原則：valueCtx 會嵌入 parent，所以還是會查找 parent 的 Value 方法的。</p>
-<pre><code>ctx = context.TODO()
+<pre><code class="language-go">ctx = context.TODO()
 ctx = context.WithValue(ctx, "key1", "0001")
 ctx = context.WithValue(ctx, "key2", "0001")
 ctx = context.WithValue(ctx, "key3", "0001")
@@ -284,7 +284,7 @@ fmt.Println(ctx.Value("key1"))
 <p>WithCancel 返回值中的第二個值是一個 cancel 函數。其實，這個返回值的名稱（cancel）和類型（Cancel）也非常迷惑人。</p>
 <p>記住，不是隻有你想中途放棄，才去調用 cancel，只要你的任務正常完成了，就需要調用 cancel，這樣，這個 Context 才能釋放它的資源（通知它的 children 處理 cancel，從它的 parent 中把自己移除，甚至釋放相關的 goroutine）。很多同學在使用這個方法的時候，都會忘記調用 cancel，切記切記，而且一定儘早釋放。</p>
 <p>我們來看下 WithCancel 方法的實現代碼：</p>
-<pre><code>func WithCancel(parent Context) (ctx Context, cancel CancelFunc) {
+<pre><code class="language-go">func WithCancel(parent Context) (ctx Context, cancel CancelFunc) {
     c := newCancelCtx(parent)
     propagateCancel(parent, &amp;c)// 把c朝上傳播
     return &amp;c, func() { c.cancel(true, Canceled) }
@@ -299,7 +299,7 @@ func newCancelCtx(parent Context) cancelCtx {
 <p>當這個 cancelCtx 的 cancel 函數被調用的時候，或者 parent 的 Done 被 close 的時候，這個 cancelCtx 的 Done 才會被 close。</p>
 <p>cancel 是向下傳遞的，如果一個 WithCancel 生成的 Context 被 cancel 時，如果它的子 Context（也有可能是孫，或者更低，依賴子的類型）也是 cancelCtx 類型的，就會被 cancel，但是不會向上傳遞。parent Context 不會因為子 Context 被 cancel 而 cancel。</p>
 <p>cancelCtx 被取消時，它的 Err 字段就是下面這個 Canceled 錯誤：</p>
-<pre><code>var Canceled = errors.New("context canceled")WithTimeoutWithTimeout 其實是和 WithDeadline 一樣，只不過一個參數是超時時間，一個參數是截止時間。超時時間加上當前時間，其實就是截止時間，因此，WithTimeout 的實現是：
+<pre><code class="language-go">var Canceled = errors.New("context canceled")WithTimeoutWithTimeout 其實是和 WithDeadline 一樣，只不過一個參數是超時時間，一個參數是截止時間。超時時間加上當前時間，其實就是截止時間，因此，WithTimeout 的實現是：
 
 func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
     // 當前時間+timeout就是deadline
@@ -315,7 +315,7 @@ func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
 <li>parent 的 Done 被 close。</li>
 </ol>
 <p>下面的代碼是 WithDeadline 方法的實現：</p>
-<pre><code>func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
+<pre><code class="language-go">func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
     // 如果parent的截止時間更早，直接返回一個cancelCtx即可
     if cur, ok := parent.Deadline(); ok &amp;&amp; cur.Before(d) {
         return WithCancel(parent)
@@ -342,7 +342,7 @@ func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
 }
 </code></pre>
 <p>和 cancelCtx 一樣，WithDeadline（WithTimeout）返回的 cancel 一定要調用，並且要儘可能早地被調用，這樣才能儘早釋放資源，不要單純地依賴截止時間被動取消。正確的使用姿勢是啥呢？我們來看一個例子。</p>
-<pre><code>func slowOperationWithTimeout(ctx context.Context) (Result, error) {
+<pre><code class="language-go">func slowOperationWithTimeout(ctx context.Context) (Result, error) {
   ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
   defer cancel() // 一旦慢操作完成就立馬調用cancel
   return slowOperation(ctx)

@@ -192,20 +192,20 @@
 <p>在使用 ErrGroup 時，我們要用到三個方法，分別是 WithContext、Go 和 Wait。</p>
 <p><strong>1.WithContext</strong></p>
 <p>在創建一個 Group 對象時，需要使用 WithContext 方法：</p>
-<pre><code>func WithContext(ctx context.Context) (*Group, context.Context)
+<pre><code class="language-go">func WithContext(ctx context.Context) (*Group, context.Context)
 </code></pre>
 <p>這個方法返回一個 Group 實例，同時還會返回一個使用 context.WithCancel(ctx) 生成的新 Context。一旦有一個子任務返回錯誤，或者是 Wait 調用返回，這個新 Context 就會被 cancel。</p>
 <p>Group 的零值也是合法的，只不過，你就沒有一個可以監控是否 cancel 的 Context 了。</p>
 <p>注意，如果傳遞給 WithContext 的 ctx 參數，是一個可以 cancel 的 Context 的話，那麼，它被 cancel 的時候，並不會終止正在執行的子任務。</p>
 <p><strong>2.Go</strong></p>
 <p>我們再來學習下執行子任務的 Go 方法：</p>
-<pre><code>func (g *Group) Go(f func() error)
+<pre><code class="language-go">func (g *Group) Go(f func() error)
 </code></pre>
 <p>傳入的子任務函數 f 是類型為 func() error 的函數，如果任務執行成功，就返回 nil，否則就返回 error，並且會 cancel 那個新的 Context。</p>
 <p>一個任務可以分成好多個子任務，而且，可能有多個子任務執行失敗返回 error，不過，Wait 方法只會返回第一個錯誤，所以，如果想返回所有的錯誤，需要特別的處理，我先留個小懸念，一會兒再講。</p>
 <p><strong>3.Wait</strong></p>
 <p>類似 WaitGroup，Group 也有 Wait 方法，等所有的子任務都完成後，它才會返回，否則只會阻塞等待。如果有多個子任務返回錯誤，它只會返回第一個出現的錯誤，如果所有的子任務都執行成功，就返回 nil：</p>
-<pre><code>func (g *Group) Wait() errorErrGroup 使用例子好了，知道了基本用法，下面我來給你介紹幾個例子，幫助你全面地掌握 ErrGroup 的使用方法和應用場景。簡單例子：返回第一個錯誤先來看一個簡單的例子。在這個例子中，啟動了三個子任務，其中，子任務 2 會返回執行失敗，其它兩個執行成功。在三個子任務都執行後，group.Wait 才會返回第 2 個子任務的錯誤。
+<pre><code class="language-go">func (g *Group) Wait() errorErrGroup 使用例子好了，知道了基本用法，下面我來給你介紹幾個例子，幫助你全面地掌握 ErrGroup 的使用方法和應用場景。簡單例子：返回第一個錯誤先來看一個簡單的例子。在這個例子中，啟動了三個子任務，其中，子任務 2 會返回執行失敗，其它兩個執行成功。在三個子任務都執行後，group.Wait 才會返回第 2 個子任務的錯誤。
 
 package main
 
@@ -252,7 +252,7 @@ func main() {
 <h3 id="更進一步返回所有子任務的錯誤"><a class="header" href="#更進一步返回所有子任務的錯誤">更進一步，返回所有子任務的錯誤</a></h3>
 <p>Group 只能返回子任務的第一個錯誤，後續的錯誤都會被丟棄。但是，有時候我們需要知道每個任務的執行情況。怎麼辦呢？這個時候，我們就可以用稍微有點曲折的方式去實現。我們使用一個 result slice 保存子任務的執行結果，這樣，通過查詢 result，就可以知道每一個子任務的結果了。</p>
 <p>下面的這個例子，就是使用 result 記錄每個子任務成功或失敗的結果。其實，你不僅可以使用 result 記錄 error 信息，還可以用它記錄計算結果。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "errors"
@@ -299,7 +299,7 @@ func main() {
 }任務執行流水線 PipelineGo 官方文檔中還提供了一個 pipeline 的例子。這個例子是說，由一個子任務遍歷文件夾下的文件，然後把遍歷出的文件交給 20 個 goroutine，讓這些 goroutine 並行計算文件的 md5。
 </code></pre>
 <p>這個例子中的計算邏輯你不需要重點掌握，我來把這個例子簡化一下（如果你想看原始的代碼，可以看這裡）：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
    ......
@@ -381,7 +381,7 @@ func MD5All(ctx context.Context, root string) (map[string][md5.Size]byte, error)
 <p>另外，這個庫其實是有一個併發問題的。在高併發的情況下，如果任務數大於設定的 goroutine 的數量，並且這些任務被集中加入到 Group 中，這個庫的處理方式是把子任務加入到一個數組中，但是，這個數組不是線程安全的，有併發問題，問題就在於，下面圖片中的標記為 96 行的那一行，這一行對 slice 的 append 操作不是線程安全的：</p>
 <p><img src="./images/3fb3c2c985e10a55ebc114bc9cbe27a2.png" alt="" /></p>
 <p>我們可以寫一個簡單的程序來測試這個問題：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "context"
@@ -427,7 +427,7 @@ func main() {
 <p>運行這個程序的話，你就會發現死鎖問題，因為我們的測試程序是一個簡單的命令行工具，程序退出的時候，Go runtime 能檢測到死鎖問題。如果是一直運行的服務器程序，死鎖問題有可能是檢測不出來的，程序一直會 hang 在 Wait 的調用上。</p>
 <h3 id="neilotooleerrgroup"><a class="header" href="#neilotooleerrgroup">neilotoole/errgroup</a></h3>
 <p>neilotoole/errgroup 是今年年中新出現的一個 ErrGroup 擴展庫，它可以直接替換官方的 ErrGroup，方法都一樣，原有功能也一樣，只不過<strong>增加了可以控制併發 goroutine 的功能</strong>。它的方法集如下：</p>
-<pre><code>type Group
+<pre><code class="language-go">type Group
   func WithContext(ctx context.Context) (*Group, context.Context)
   func WithContextN(ctx context.Context, numG, qSize int) (*Group, context.Context)
   func (g *Group) Go(f func() error)
@@ -439,7 +439,7 @@ func main() {
 <p>Facebook 提供的這個 ErrGroup，其實並不是對 Go 擴展庫 ErrGroup 的擴展，而是對標準庫 WaitGroup 的擴展。不過，因為它們的名字一樣，處理的場景也類似，所以我把它也列在了這裡。</p>
 <p>標準庫的 WaitGroup 只提供了 Add、Done、Wait 方法，而且 Wait 方法也沒有返回子 goroutine 的 error。而 Facebook 提供的 ErrGroup 提供的 Wait 方法可以返回 error，而且可以包含多個 error。子任務在調用 Done 之前，可以把自己的 error 信息設置給 ErrGroup。接著，Wait 在返回的時候，就會把這些 error 信息返回給調用者。</p>
 <p>我們來看下 Group 的方法：</p>
-<pre><code>type Group
+<pre><code class="language-go">type Group
   func (g *Group) Add(delta int)
   func (g *Group) Done()
   func (g *Group) Error(e error)
@@ -448,7 +448,7 @@ func main() {
 <p>關於 Wait 方法，我剛剛已經介紹了它和標準庫 WaitGroup 的不同，我就不多說了。這裡還有一個不同的方法，就是 Error 方法，</p>
 <p>我舉個例子演示一下 Error 的使用方法。</p>
 <p>在下面的這個例子中，第 26 行的子 goroutine 設置了 error 信息，第 39 行會把這個 error 信息輸出出來。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "errors"
@@ -501,7 +501,7 @@ func main() {
 <p><strong>默認情況下，SizedGroup 控制的是子任務的併發數量，而不是 goroutine 的數量</strong>。在這種方式下，每次調用 Go 方法都不會被阻塞，而是新建一個 goroutine 去執行。</p>
 <p>如果想控制 goroutine 的數量，你可以使用 syncs.Preemptive 設置這個併發原語的可選項。如果設置了這個可選項，但在調用 Go 方法的時候沒有可用的 goroutine，那麼調用者就會等待，直到有 goroutine 可以處理這個子任務才返回，這個控制在內部是使用信號量實現的。</p>
 <p>我們來看一個使用 SizedGroup 的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "context"
@@ -544,15 +544,15 @@ func main() {
 <p>接下來，我們看一下它提供的三個方法，分別是 <strong>All、Race 和 Retry</strong>。</p>
 <p><strong>All 方法</strong></p>
 <p>All 方法的簽名如下：</p>
-<pre><code>func All(ctx context.Context, fns ...AsyncFunc) ([]interface{}, []error)
+<pre><code class="language-go">func All(ctx context.Context, fns ...AsyncFunc) ([]interface{}, []error)
 </code></pre>
 <p>它會等待所有的異步函數（AsyncFunc）都執行完才返回，而且返回結果的順序和傳入的函數的順序保持一致。第一個返回參數是子任務的執行結果，第二個參數是子任務執行時的錯誤信息。</p>
 <p>其中，異步函數的定義如下：</p>
-<pre><code>type AsyncFunc func(ctx context.Context) (interface{}, error)
+<pre><code class="language-go">type AsyncFunc func(ctx context.Context) (interface{}, error)
 </code></pre>
 <p>可以看到，ctx 會被傳遞給子任務。如果你 cancel 這個 ctx，可以取消子任務。</p>
 <p>我們來看一個使用 All 方法的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
   "context"
@@ -584,16 +584,16 @@ func main() {
 <p><strong>Race 方法</strong></p>
 <p>Race 方法跟 All 方法類似，只不過，在使用 Race 方法的時候，只要一個異步函數執行沒有錯誤，就立馬返回，而不會返回所有的子任務信息。如果所有的子任務都沒有成功，就會返回最後一個 error 信息。</p>
 <p>Race 方法簽名如下：</p>
-<pre><code>func Race(ctx context.Context, fns ...AsyncFunc) (interface{}, error)
+<pre><code class="language-go">func Race(ctx context.Context, fns ...AsyncFunc) (interface{}, error)
 </code></pre>
 <p>如果有一個正常的子任務的結果返回，Race 會把傳入到其它子任務的 Context cancel 掉，這樣子任務就可以中斷自己的執行。</p>
 <p>Race 的使用方法也跟 All 方法類似，我就不再舉例子了，你可以把 All 方法的例子中的 All 替換成 Race 方式測試下。</p>
 <p><strong>Retry 方法</strong></p>
 <p><strong>Retry 不是執行一組子任務，而是執行一個子任務</strong>。如果子任務執行失敗，它會嘗試一定的次數，如果一直不成功 ，就會返回失敗錯誤 ，如果執行成功，它會立即返回。如果 retires 等於 0，它會永遠嘗試，直到成功。</p>
-<pre><code>func Retry(ctx context.Context, retires int, fn AsyncFunc) (interface{}, error)
+<pre><code class="language-go">func Retry(ctx context.Context, retires int, fn AsyncFunc) (interface{}, error)
 </code></pre>
 <p>再來看一個使用 Retry 的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
   "context"
@@ -617,32 +617,32 @@ func main() {
 } HunchHunch提供的功能和 gollback 類似，不過它提供的方法更多，而且它提供的和 gollback 相應的方法，也有一些不同。我來一一介紹下。
 </code></pre>
 <p>它定義了執行子任務的函數，這和 gollback 的 AyncFunc 是一樣的，它的定義如下：</p>
-<pre><code>type Executable func(context.Context) (interface{}, error)
+<pre><code class="language-go">type Executable func(context.Context) (interface{}, error)
 </code></pre>
 <p><strong>All 方法</strong></p>
 <p>All 方法的簽名如下：</p>
-<pre><code>func All(parentCtx context.Context, execs ...Executable) ([]interface{}, error)
+<pre><code class="language-go">func All(parentCtx context.Context, execs ...Executable) ([]interface{}, error)
 </code></pre>
 <p>它會傳入一組可執行的函數（子任務），返回子任務的執行結果。和 gollback 的 All 方法不一樣的是，一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p><strong>Take 方法</strong></p>
 <p>Take 方法的簽名如下：</p>
-<pre><code>func Take(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
+<pre><code class="language-go">func Take(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
 </code></pre>
 <p>你可以指定 num 參數，只要有 num 個子任務正常執行完沒有錯誤，這個方法就會返回這幾個子任務的結果。一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p><strong>Last 方法</strong></p>
 <p>Last 方法的簽名如下：</p>
-<pre><code>func Last(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
+<pre><code class="language-go">func Last(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
 </code></pre>
 <p>它只返回最後 num 個正常執行的、沒有錯誤的子任務的結果。一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p>比如 num 等於 1，那麼，它只會返回最後一個無錯的子任務的結果。</p>
 <p><strong>Retry 方法</strong></p>
 <p>Retry 方法的簽名如下：</p>
-<pre><code>func Retry(parentCtx context.Context, retries int, fn Executable) (interface{}, error)
+<pre><code class="language-go">func Retry(parentCtx context.Context, retries int, fn Executable) (interface{}, error)
 </code></pre>
 <p>它的功能和 gollback 的 Retry 方法的功能一樣，如果子任務執行出錯，就會不斷嘗試，直到成功或者是達到重試上限。如果達到重試上限，就會返回錯誤。如果 retries 等於 0，它會不斷嘗試。</p>
 <p><strong>Waterfall 方法</strong></p>
 <p>Waterfall 方法簽名如下：</p>
-<pre><code>func Waterfall(parentCtx context.Context, execs ...ExecutableInSequence) (interface{}, error)
+<pre><code class="language-go">func Waterfall(parentCtx context.Context, execs ...ExecutableInSequence) (interface{}, error)
 </code></pre>
 <p>它其實是一個 pipeline 的處理方式，所有的子任務都是串行執行的，前一個子任務的執行結果會被當作參數傳給下一個子任務，直到所有的任務都完成，返回最後的執行結果。一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p>gollback 和 Hunch 是屬於同一類的併發原語，對一組子任務的執行結果，可以選擇一個結果或者多個結果，這也是現在熱門的微服務常用的服務治理的方法。</p>
@@ -650,7 +650,7 @@ func main() {
 <p>接下來，我再介紹一個<strong>和時間相關的處理一組 goroutine 的併發原語 schedgroup</strong>。</p>
 <p>schedgroup是 Matt Layher 開發的 worker pool，可以指定任務在某個時間或者某個時間之後執行。Matt Layher 也是一個知名的 Gopher，經常在一些會議上分享一些他的 Go 開發經驗，他在 GopherCon Europe 2020 大會上專門介紹了這個併發原語：schedgroup: a timer-based goroutine concurrency primitive ，課下你可以點開這個鏈接看一下，下面我來給你介紹一些重點。</p>
 <p>這個併發原語包含的方法如下：</p>
-<pre><code>type Group
+<pre><code class="language-go">type Group
   func New(ctx context.Context) *Group
   func (g *Group) Delay(delay time.Duration, fn func())
   func (g *Group) Schedule(when time.Time, fn func())
@@ -666,7 +666,7 @@ func main() {
 <p><strong>第二點是，Wait 方法只能調用一次，如果多次調用的話，就會 panic。</strong></p>
 <p>你可能認為，簡單地使用 timer 就可以實現這個功能。其實，如果只有幾個子任務，使用 timer 不是問題，但一旦有大量的子任務，而且還要能夠 cancel，那麼，使用 timer 的話，CPU 資源消耗就比較大了。所以，schedgroup 在實現的時候，就使用 container/heap，按照子任務的執行時間進行排序，這樣可以避免使用大量的 timer，從而提高性能。</p>
 <p>我們來看一個使用 schedgroup 的例子，下面代碼會依次輸出 1、2、3：</p>
-<pre><code>sg := schedgroup.New(context.Background())
+<pre><code class="language-go">sg := schedgroup.New(context.Background())
 
 // 設置子任務分別在100、200、300之後執行
 for i := 0; i &lt; 3; i++ {

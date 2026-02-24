@@ -191,7 +191,7 @@
 </ol>
 <p>在這種情況下，鎖被獲取之後，就不會被釋放了，這也就意味著，其它的 goroutine 永遠都沒機會獲取到鎖。</p>
 <p>我們再來看缺少 Lock 的場景，這就很簡單了，一般來說就是誤操作刪除了 Lock。 比如先前使用 Mutex 都是正常的，結果後來其他人重構代碼的時候，由於對代碼不熟悉，或者由於開發者的馬虎，把 Lock 調用給刪除了，或者註釋掉了。比如下面的代碼，mu.Lock() 一行代碼被刪除了，直接 Unlock 一個未加鎖的 Mutex 會 panic：</p>
-<pre><code>func foo() {
+<pre><code class="language-go">func foo() {
     var mu sync.Mutex
     defer mu.Unlock()
     fmt.Println("hello world!")
@@ -203,7 +203,7 @@
 <p>第二種誤用是 Copy 已使用的 Mutex。在正式分析這個錯誤之前，我先交代一個小知識點，那就是 Package sync 的同步原語在使用後是不能複製的。我們知道 Mutex 是最常用的一個同步原語，那它也是不能複製的。為什麼呢？</p>
 <p>原因在於，Mutex 是一個有狀態的對象，它的 state 字段記錄這個鎖的狀態。如果你要複製一個已經加鎖的 Mutex 給一個新的變量，那麼新的剛初始化的變量居然被加鎖了，這顯然不符合你的期望，因為你期望的是一個零值的 Mutex。關鍵是在併發環境下，你根本不知道要複製的 Mutex 狀態是什麼，因為要複製的 Mutex 是由其它 goroutine 併發訪問的，狀態可能總是在變化。</p>
 <p>當然，你可能說，你說的我都懂，你的警告我都記下了，但是實際在使用的時候，一不小心就踩了這個坑，我們來看一個例子。</p>
-<pre><code>type Counter struct {
+<pre><code class="language-go">type Counter struct {
     sync.Mutex
     Count int
 }
@@ -231,7 +231,7 @@ func foo(c Counter) {
 <p>你看，使用這個工具就可以發現 Mutex 複製的問題，錯誤信息顯示得很清楚，是在調用 foo 函數的時候發生了 lock value 複製的情況，還告訴我們出問題的代碼行數以及 copy lock 導致的錯誤。</p>
 <p>那麼，vet 工具是怎麼發現 Mutex 複製使用問題的呢？我帶你簡單分析一下。</p>
 <p>檢查是通過copylock分析器靜態分析實現的。這個分析器會分析函數調用、range 遍歷、複製、聲明、函數返回值等位置，有沒有鎖的值 copy 的情景，以此來判斷有沒有問題。可以說，只要是實現了 Locker 接口，就會被分析。我們看到，下面的代碼就是確定什麼類型會被分析，其實就是實現了 Lock/Unlock 兩個方法的 Locker 接口：</p>
-<pre><code>var lockerType *types.Interface
+<pre><code class="language-go">var lockerType *types.Interface
   
   // Construct a sync.Locker interface type.
   func init() {
@@ -252,7 +252,7 @@ func foo(c Counter) {
 <p>瞭解了可重入鎖的概念，那我們來看 Mutex 使用的錯誤場景。劃重點了：<strong>Mutex 不是可重入的鎖。</strong></p>
 <p>想想也不奇怪，因為 Mutex 的實現中沒有記錄哪個 goroutine 擁有這把鎖。理論上，任何 goroutine 都可以隨意地 Unlock 這把鎖，所以沒辦法計算重入條件，畢竟，“臣妾做不到啊”！</p>
 <p>所以，一旦誤用 Mutex 的重入，就會導致報錯。下面是一個誤用 Mutex 的重入例子：</p>
-<pre><code>func foo(l sync.Locker) {
+<pre><code class="language-go">func foo(l sync.Locker) {
     fmt.Println("in foo")
     l.Lock()
     bar(l)
@@ -283,12 +283,12 @@ func main() {
 <p><strong>方案一</strong>：<strong>goroutine id</strong></p>
 <p>這個方案的關鍵第一步是獲取 goroutine id，方式有兩種，分別是簡單方式和 hacker 方式。</p>
 <p>簡單方式，就是通過 runtime.Stack 方法獲取棧幀信息，棧幀信息裡包含 goroutine id。你可以看看上面 panic 時候的貼圖，goroutine id 明明白白地顯示在那裡。runtime.Stack 方法可以獲取當前的 goroutine 信息，第二個參數為 true 會輸出所有的 goroutine 信息，信息的格式如下：</p>
-<pre><code>goroutine 1 [running]:
+<pre><code class="language-go">goroutine 1 [running]:
 main.main()
         ....../main.go:19 +0xb1
 </code></pre>
 <p>第一行格式為 goroutine xxx，其中 xxx 就是 goroutine id，你只要解析出這個 id 即可。解析的方法可以採用下面的代碼：</p>
-<pre><code>func GoID() int {
+<pre><code class="language-go">func GoID() int {
     var buf [64]byte
     n := runtime.Stack(buf[:], false)
     // 得到id字符串
@@ -308,7 +308,7 @@ main.main()
 <p>需要注意的是，不同 Go 版本的 goroutine 的結構可能不同，所以需要根據 Go 的不同版本進行調整。當然了，如果想要搞清楚各個版本的 goroutine 結構差異，所涉及的內容又過於底層而且複雜，學習成本太高。怎麼辦呢？我們可以重點關注一些庫。我們沒有必要重複發明輪子，直接使用第三方的庫來獲取 goroutine id 就可以了。</p>
 <p>好消息是現在已經有很多成熟的方法了，可以支持多個 Go 版本的 goroutine id，給你推薦一個常用的庫：petermattis/goid。</p>
 <p>知道了如何獲取 goroutine id，接下來就是最後的關鍵一步了，我們實現一個可以使用的可重入鎖：</p>
-<pre><code>// RecursiveMutex 包裝一個Mutex,實現可重入
+<pre><code class="language-go">// RecursiveMutex 包裝一個Mutex,實現可重入
 type RecursiveMutex struct {
     sync.Mutex
     owner     int64 // 當前持有鎖的goroutine id
@@ -349,7 +349,7 @@ func (m *RecursiveMutex) Unlock() {
 <p><strong>方案二</strong>：<strong>token</strong></p>
 <p>方案一是用 goroutine id 做 goroutine 的標識，我們也可以讓 goroutine 自己來提供標識。不管怎麼說，Go 開發者不期望你利用 goroutine id 做一些不確定的東西，所以，他們沒有暴露獲取 goroutine id 的方法。</p>
 <p>下面的代碼是第二種方案。調用者自己提供一個 token，獲取鎖的時候把這個 token 傳入，釋放鎖的時候也需要把這個 token 傳入。通過用戶傳入的 token 替換方案一中 goroutine id，其它邏輯和方案一一致。</p>
-<pre><code>// Token方式的遞歸鎖
+<pre><code class="language-go">// Token方式的遞歸鎖
 type TokenRecursiveMutex struct {
     sync.Mutex
     token     int64
@@ -394,7 +394,7 @@ func (m *TokenRecursiveMutex) Unlock(token int64) {
 <p>你看，死鎖問題還真是挺有意思的，所以有很多人研究這個事兒。一個經典的死鎖問題就是哲學家就餐問題，我不做介紹了，你可以點擊鏈接進一步瞭解。其實，死鎖問題在現實生活中也比比皆是。</p>
 <p>舉個例子。有一次我去派出所開證明，派出所要求物業先證明我是本物業的業主，但是，物業要我提供派出所的證明，才能給我開物業證明，結果就陷入了死鎖狀態。你可以把派出所和物業看成兩個 goroutine，派出所證明和物業證明是兩個資源，雙方都持有自己的資源而要求對方的資源，而且自己的資源自己持有，不可剝奪。</p>
 <p>這是一個最簡單的只有兩個 goroutine 相互等待的死鎖的例子，轉化成代碼如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "fmt"

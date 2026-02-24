@@ -185,7 +185,7 @@
 <p>我們還是從 WaitGroup 的基本用法學起吧。</p>
 <h2 id="waitgroup-的基本用法"><a class="header" href="#waitgroup-的基本用法">WaitGroup 的基本用法</a></h2>
 <p>Go 標準庫中的 WaitGroup 提供了三個方法，保持了 Go 簡潔的風格。</p>
-<pre><code>    func (wg *WaitGroup) Add(delta int)
+<pre><code class="language-go">    func (wg *WaitGroup) Add(delta int)
     func (wg *WaitGroup) Done()
     func (wg *WaitGroup) Wait()
 </code></pre>
@@ -197,7 +197,7 @@
 </ol>
 <p>接下來，我們通過一個使用 WaitGroup 的例子，來看下 Add、Done、Wait 方法的基本用法。</p>
 <p>在這個例子中，我們使用了以前實現的計數器 struct。我們啟動了 10 個 worker，分別對計數值加一，10 個 worker 都完成後，我們期望輸出計數器的值。</p>
-<pre><code>// 線程安全的計數器
+<pre><code class="language-go">// 線程安全的計數器
 type Counter struct {
     mu    sync.Mutex
     count uint64
@@ -252,7 +252,7 @@ func main() {
 <li>state1，一個具有複合意義的字段，包含 WaitGroup 的計數、阻塞在檢查點的 waiter 數和信號量。</li>
 </ol>
 <p>WaitGroup 的數據結構定義以及 state 信息的獲取方法如下：</p>
-<pre><code>type WaitGroup struct {
+<pre><code class="language-go">type WaitGroup struct {
     // 避免複製使用的一個技巧，可以告訴vet工具違反了複製使用的規則
     noCopy noCopy
     // 64bit(8bytes)的值分成兩段，高32bit是計數值，低32bit是waiter的計數
@@ -282,7 +282,7 @@ func (wg *WaitGroup) state() (statep *uint64, semap *uint32) {
 <p>在查看這部分源碼實現時，我們會發現，除了這些方法本身的實現外，還會有一些額外的代碼，主要是 race 檢查和異常檢查的代碼。其中，有幾個檢查非常關鍵，如果檢查不通過，會出現 panic，這部分內容我會在下一小節分析 WaitGroup 的錯誤使用場景時介紹。現在，我們先專注在 Add、Wait 和 Done 本身的實現代碼上。</p>
 <p>我先為你梳理下 <strong>Add 方法的邏輯</strong>。Add 方法主要操作的是 state 的計數部分。你可以為計數值增加一個 delta 值，內部通過原子操作把這個值加到計數值上。需要注意的是，這個 delta 也可以是個負數，相當於為計數值減去一個值，Done 方法內部其實就是通過 Add(-1) 實現的。</p>
 <p>它的實現代碼如下：</p>
-<pre><code>func (wg *WaitGroup) Add(delta int) {
+<pre><code class="language-go">func (wg *WaitGroup) Add(delta int) {
     statep, semap := wg.state()
     // 高32bit是計數值v，所以把delta左移32，增加到計數上
     state := atomic.AddUint64(statep, uint64(delta)&lt;&lt;32)
@@ -308,7 +308,7 @@ func (wg *WaitGroup) Done() {
 </code></pre>
 <p>Wait 方法的實現邏輯是：不斷檢查 state 的值。如果其中的計數值變為了 0，那麼說明所有的任務已完成，調用者不必再等待，直接返回。如果計數值大於 0，說明此時還有任務沒完成，那麼調用者就變成了等待者，需要加入 waiter 隊列，並且阻塞住自己。</p>
 <p>其主幹實現代碼如下：</p>
-<pre><code>func (wg *WaitGroup) Wait() {
+<pre><code class="language-go">func (wg *WaitGroup) Wait() {
     statep, semap := wg.state()
     
     for {
@@ -335,7 +335,7 @@ func (wg *WaitGroup) Done() {
 <p>一般情況下，有兩種方法會導致計數器設置為負數。</p>
 <p>第一種方法是：<strong>調用 Add 的時候傳遞一個負數</strong>。如果你能保證當前的計數器加上這個負數後還是大於等於 0 的話，也沒有問題，否則就會導致 panic。</p>
 <p>比如下面這段代碼，計數器的初始值為 10，當第一次傳入 -10 的時候，計數值被設置為 0，不會有啥問題。但是，再緊接著傳入 -1 以後，計數值就被設置為負數了，程序就會出現 panic。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(10)
 
@@ -348,7 +348,7 @@ func (wg *WaitGroup) Done() {
 <p><strong>使用 WaitGroup 的正確姿勢是，預先確定好 WaitGroup 的計數值，然後調用相同次數的 Done 完成相應的任務</strong>。比如，在 WaitGroup 變量聲明之後，就立即設置它的計數值，或者在 goroutine 啟動之前增加 1，然後在 goroutine 中調用 Done。</p>
 <p>如果你沒有遵循這些規則，就很可能會導致 Done 方法調用的次數和計數值不一致，進而造成死鎖（Done 調用次數比計數值少）或者 panic（Done 調用次數比計數值多）。</p>
 <p>比如下面這個例子中，多調用了一次 Done 方法後，會導致計數值為負，所以程序運行到這一行會出現 panic。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(1)
 
@@ -358,7 +358,7 @@ func (wg *WaitGroup) Done() {
 }常見問題二：不期望的 Add 時機在使用 WaitGroup 的時候，你一定要遵循的原則就是，等所有的 Add 方法調用之後再調用 Wait，否則就可能導致 panic 或者不期望的結果。
 </code></pre>
 <p>我們構造這樣一個場景：只有部分的 Add/Done 執行完後，Wait 就返回。我們看一個例子：啟動四個 goroutine，每個 goroutine 內部調用 Add(1) 然後調用 Done()，主 goroutine 調用 Wait 等待任務完成。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     go dosomething(100, &amp;wg) // 啟動第一個goroutine
     go dosomething(110, &amp;wg) // 啟動第二個goroutine
@@ -380,7 +380,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 </code></pre>
 <p>在這個例子中，我們原本設想的是，等四個 goroutine 都執行完畢後輸出 Done 的信息，但是它的錯誤之處在於，將 WaitGroup.Add 方法的調用放在了子 gorotuine 中。等主 goorutine 調用 Wait 的時候，因為四個任務 goroutine 一開始都休眠，所以可能 WaitGroup 的 Add 方法還沒有被調用，WaitGroup 的計數還是 0，所以它並沒有等待四個子 goroutine 執行完畢才繼續執行，而是立刻執行了下一步。</p>
 <p>導致這個錯誤的原因是，沒有遵循先完成所有的 Add 之後才 Wait。要解決這個問題，一個方法是，預先設置計數值：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(4) // 預先設定WaitGroup的計數值
 
@@ -402,7 +402,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 }
 </code></pre>
 <p>另一種方法是在啟動子 goroutine 之前才調用 Add：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
 
     dosomething(100, &amp;wg) // 調用方法，把計數值加1，並啟動任務goroutine
@@ -430,7 +430,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 <p>“前一個 Wait 還沒結束就重用 WaitGroup”這一點似乎不太好理解，我借用田徑比賽的例子和你解釋下吧。在田徑比賽的百米小組賽中，需要把選手分成幾組，一組選手比賽完之後，就可以進行下一組了。為了確保兩組比賽時間上沒有衝突，我們在模型化這個場景的時候，可以使用 WaitGroup。</p>
 <p>WaitGroup 等一組比賽的所有選手都跑完後 5 分鐘，才開始下一組比賽。下一組比賽還可以使用這個 WaitGroup 來控制，因為 <strong>WaitGroup 是可以重用的</strong>。只要 WaitGroup 的計數值恢復到零值的狀態，那麼它就可以被看作是新創建的 WaitGroup，被重複使用。</p>
 <p>但是，如果我們在 WaitGroup 的計數值還沒有恢復到零值的時候就重用，就會導致程序 panic。我們看一個例子，初始設置 WaitGroup 的計數值為 1，啟動一個 goroutine 先調用 Done 方法，接著就調用 Add 方法，Add 方法有可能和主 goroutine 併發執行。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(1)
     go func() {
@@ -449,7 +449,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 <p>我們在第 3 講學習 Mutex 的時候用到了 vet 工具。vet 會對實現 Locker 接口的數據類型做靜態檢查，一旦代碼中有複製使用這種數據類型的情況，就會發出警告。但是，WaitGroup 同步原語不就是 Add、Done 和 Wait 方法嗎？vet 能檢查出來嗎？</p>
 <p>其實是可以的。通過給 WaitGroup 添加一個 noCopy 字段，我們就可以為 WaitGroup 實現 Locker 接口，這樣 vet 工具就可以做複製檢查了。而且因為 noCopy 字段是未輸出類型，所以 WaitGroup 不會暴露 Lock/Unlock 方法。</p>
 <p>noCopy 字段的類型是 noCopy，它只是一個輔助的、用來幫助 vet 檢查用的類型:</p>
-<pre><code>type noCopy struct{}
+<pre><code class="language-go">type noCopy struct{}
 
 // Lock is a no-op used by -copylocks checker from `go vet`.
 func (*noCopy) Lock()   {}
@@ -459,7 +459,7 @@ func (*noCopy) Unlock() {}
 <h2 id="流行的-go-開發項目中的坑"><a class="header" href="#流行的-go-開發項目中的坑">流行的 Go 開發項目中的坑</a></h2>
 <p>接下來又到了喝枸杞紅棗茶的時間了。你可以稍微休息一下，心態放輕鬆地跟我一起圍觀下知名項目犯過的錯，比如 copy Waitgroup、Add/Wait 併發執行問題、遺漏 Add 等 Bug。</p>
 <p>有網友在 Go 的issue 28123中提了以下的例子，你能發現這段代碼有什麼問題嗎？</p>
-<pre><code>type TestStruct struct {
+<pre><code class="language-go">type TestStruct struct {
   Wait sync.WaitGroup
 }
 

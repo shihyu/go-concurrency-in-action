@@ -209,40 +209,40 @@
 <p>下面，我們來具體學習下 Channel 的基本用法。</p>
 <h1 id="channel-基本用法"><a class="header" href="#channel-基本用法">Channel 基本用法</a></h1>
 <p>你可以往 Channel 中發送數據，也可以從 Channel 中接收數據，所以，Channel 類型（為了說起來方便，我們下面都把 Channel 叫做 chan）分為<strong>只能接收</strong>、<strong>只能發送</strong>、<strong>既可以接收又可以發送</strong>三種類型。下面是它的語法定義：</p>
-<pre><code>ChannelType = ( "chan" | "chan" "&lt;-" | "&lt;-" "chan" ) ElementType .
+<pre><code class="language-go">ChannelType = ( "chan" | "chan" "&lt;-" | "&lt;-" "chan" ) ElementType .
 </code></pre>
 <p>相應地，Channel 的正確語法如下：</p>
-<pre><code>chan string          // 可以發送接收string
+<pre><code class="language-go">chan string          // 可以發送接收string
 chan&lt;- struct{}      // 只能發送struct{}
 &lt;-chan int           // 只能從chan接收int
 </code></pre>
 <p>我們把既能接收又能發送的 chan 叫做雙向的 chan，把只能發送和只能接收的 chan 叫做單向的 chan。其中，“&lt;-”表示單向的 chan，如果你記不住，我告訴你一個簡便的方法：<strong>這個箭頭總是射向左邊的，元素類型總在最右邊。如果箭頭指向 chan，就表示可以往 chan 中塞數據；如果箭頭遠離 chan，就表示 chan 會往外吐數據</strong>。</p>
 <p>chan 中的元素是任意的類型，所以也可能是 chan 類型，我來舉個例子，比如下面的 chan 類型也是合法的：</p>
-<pre><code>chan&lt;- chan int   
+<pre><code class="language-go">chan&lt;- chan int   
 chan&lt;- &lt;-chan int  
 &lt;-chan &lt;-chan int
 chan (&lt;-chan int)
 </code></pre>
 <p>可是，怎麼判定箭頭符號屬於哪個 chan 呢？其實，“&lt;-”有個規則，總是儘量和左邊的 chan 結合（The <code>&lt;-</code> operator associates with the leftmost <code>chan</code> possible:），因此，上面的定義和下面的使用括號的劃分是一樣的：</p>
-<pre><code>chan&lt;- （chan int） // &lt;- 和第一個chan結合
+<pre><code class="language-go">chan&lt;- （chan int） // &lt;- 和第一個chan結合
 chan&lt;- （&lt;-chan int） // 第一個&lt;-和最左邊的chan結合，第二個&lt;-和左邊第二個chan結合
 &lt;-chan （&lt;-chan int） // 第一個&lt;-和最左邊的chan結合，第二個&lt;-和左邊第二個chan結合 
 chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan結合
 </code></pre>
 <p>通過 make，我們可以初始化一個 chan，未初始化的 chan 的零值是 nil。你可以設置它的容量，比如下面的 chan 的容量是 9527，我們把這樣的 chan 叫做 buffered chan；如果沒有設置，它的容量是 0，我們把這樣的 chan 叫做 unbuffered chan。</p>
-<pre><code>make(chan int, 9527)
+<pre><code class="language-go">make(chan int, 9527)
 </code></pre>
 <p>如果 chan 中還有數據，那麼，從這個 chan 接收數據的時候就不會阻塞，如果 chan 還未滿（“滿”指達到其容量），給它發送數據也不會阻塞，否則就會阻塞。unbuffered chan 只有讀寫都準備好之後才不會阻塞，這也是很多使用 unbuffered chan 時的常見 Bug。</p>
 <p>還有一個知識點需要你記住：nil 是 chan 的零值，是一種特殊的 chan，對值是 nil 的 chan 的發送接收調用者總是會阻塞。</p>
 <p>下面，我來具體給你介紹幾種基本操作，分別是發送數據、接收數據，以及一些其它操作。學會了這幾種操作，你就能真正地掌握 Channel 的用法了。</p>
 <p><strong>1. 發送數據</strong></p>
 <p>往 chan 中發送一個數據使用“ch&lt;-”，發送數據是一條語句:</p>
-<pre><code>ch &lt;- 2000
+<pre><code class="language-go">ch &lt;- 2000
 </code></pre>
 <p>這裡的 ch 是 chan int 類型或者是 chan &lt;-int。</p>
 <p><strong>2. 接收數據</strong></p>
 <p>從 chan 中接收一條數據使用“&lt;-ch”，接收數據也是一條語句：</p>
-<pre><code>  x := &lt;-ch // 把接收的一條數據賦值給變量x
+<pre><code class="language-go">  x := &lt;-ch // 把接收的一條數據賦值給變量x
   foo(&lt;-ch) // 把接收的一個的數據作為參數傳給函數
   &lt;-ch // 丟棄接收的一條數據
 </code></pre>
@@ -251,7 +251,7 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 <p><strong>3. 其它操作</strong></p>
 <p>Go 內建的函數 close、cap、len 都可以操作 chan 類型：close 會把 chan 關閉掉，cap 返回 chan 的容量，len 返回 chan 中緩存的還未被取走的元素數量。</p>
 <p>send 和 recv 都可以作為 select 語句的 case clause，如下面的例子：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var ch = make(chan int, 10)
     for i := 0; i &lt; 10; i++ {
         select {
@@ -263,12 +263,12 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 }
 </code></pre>
 <p>chan 還可以應用於 for-range 語句中，比如：</p>
-<pre><code>    for v := range ch {
+<pre><code class="language-go">    for v := range ch {
         fmt.Println(v)
     }
 </code></pre>
 <p>或者是忽略讀取的值，只是清空 chan：</p>
-<pre><code>    for range ch {
+<pre><code class="language-go">    for range ch {
     }
 </code></pre>
 <p>好了，到這裡，Channel 的基本用法，我們就學完了。下面我從代碼實現的角度分析 chan 類型的實現。畢竟，只有掌握了原理，你才能真正地用好它。</p>
@@ -294,7 +294,7 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 <p><img src="./images/e347727c9fd4fd119435a29aa84f4f73.png" alt="" /></p>
 <p><strong>我們只關注 makechan 就好了，因為 makechan64 只是做了 size 檢查，底層還是調用 makechan 實現的</strong>。makechan 的目標就是生成 hchan 對象。</p>
 <p>那麼，接下來，就讓我們來看一下 makechan 的主要邏輯。主要的邏輯我都加上了註釋，它會根據 chan 的容量的大小和元素的類型不同，初始化不同的存儲空間：</p>
-<pre><code>func makechan(t *chantype, size int) *hchan {
+<pre><code class="language-go">func makechan(t *chantype, size int) *hchan {
     elem := t.elem
   
         // 略去檢查代碼
@@ -330,7 +330,7 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 <p>最終，針對不同的容量和元素類型，這段代碼分配了不同的對象來初始化 hchan 對象的字段，返回 hchan 對象。</p>
 <h2 id="send"><a class="header" href="#send">send</a></h2>
 <p>Go 在編譯發送數據給 chan 的時候，會把 send 語句轉換成 chansend1 函數，chansend1 函數會調用 chansend，我們分段學習它的邏輯：</p>
-<pre><code>func chansend1(c *hchan, elem unsafe.Pointer) {
+<pre><code class="language-go">func chansend1(c *hchan, elem unsafe.Pointer) {
     chansend(c, elem, true, getcallerpc())
 }
 func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
@@ -346,13 +346,13 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
   }
 </code></pre>
 <p>最開始，第一部分是進行判斷：如果 chan 是 nil 的話，就把調用者 goroutine park（阻塞休眠）， 調用者就永遠被阻塞住了，所以，第 11 行是不可能執行到的代碼。</p>
-<pre><code>  // 第二部分，如果chan沒有被close,並且chan滿了，直接返回
+<pre><code class="language-go">  // 第二部分，如果chan沒有被close,並且chan滿了，直接返回
     if !block &amp;&amp; c.closed == 0 &amp;&amp; full(c) {
       return false
   }
 </code></pre>
 <p>第二部分的邏輯是當你往一個已經滿了的 chan 實例發送數據時，並且想不阻塞當前調用，那麼這裡的邏輯是直接返回。chansend1 方法在調用 chansend 的時候設置了阻塞參數，所以不會執行到第二部分的分支裡。</p>
-<pre><code>  // 第三部分，chan已經被close的情景
+<pre><code class="language-go">  // 第三部分，chan已經被close的情景
     lock(&amp;c.lock) // 開始加鎖
     if c.closed != 0 {
       unlock(&amp;c.lock)
@@ -360,7 +360,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
   }
 </code></pre>
 <p>第三部分顯示的是，如果 chan 已經被 close 了，再往裡面發送數據的話會 panic。</p>
-<pre><code>      // 第四部分，從接收隊列中出隊一個等待的receiver
+<pre><code class="language-go">      // 第四部分，從接收隊列中出隊一個等待的receiver
         if sg := c.recvq.dequeue(); sg != nil {
       // 
       send(c, sg, ep, func() { unlock(&amp;c.lock) }, 3)
@@ -368,7 +368,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
     }
 </code></pre>
 <p>第四部分，如果等待隊列中有等待的 receiver，那麼這段代碼就把它從隊列中彈出，然後直接把數據交給它（通過 memmove(dst, src, t.size)），而不需要放入到 buf 中，速度可以更快一些。</p>
-<pre><code>    // 第五部分，buf還沒滿
+<pre><code class="language-go">    // 第五部分，buf還沒滿
       if c.qcount &lt; c.dataqsiz {
       qp := chanbuf(c, c.sendx)
       if raceenabled {
@@ -386,7 +386,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
     }
 </code></pre>
 <p>第五部分說明當前沒有 receiver，需要把數據放入到 buf 中，放入之後，就成功返回了。</p>
-<pre><code>      // 第六部分，buf滿。
+<pre><code class="language-go">      // 第六部分，buf滿。
         // chansend1不會進入if塊裡，因為chansend1的block=true
         if !block {
       unlock(&amp;c.lock)
@@ -397,7 +397,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <p>第六部分是處理 buf 滿的情況。如果 buf 滿了，發送者的 goroutine 就會加入到發送者的等待隊列中，直到被喚醒。這個時候，數據或者被取走了，或者 chan 被 close 了。</p>
 <h2 id="recv"><a class="header" href="#recv">recv</a></h2>
 <p>在處理從 chan 中接收數據時，Go 會把代碼轉換成 chanrecv1 函數，如果要返回兩個返回值，會轉換成 chanrecv2，chanrecv1 函數和 chanrecv2 會調用 chanrecv。我們分段學習它的邏輯：</p>
-<pre><code>    func chanrecv1(c *hchan, elem unsafe.Pointer) {
+<pre><code class="language-go">    func chanrecv1(c *hchan, elem unsafe.Pointer) {
     chanrecv(c, elem, true)
   }
   func chanrecv2(c *hchan, elem unsafe.Pointer) (received bool) {
@@ -417,13 +417,13 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 </code></pre>
 <p>chanrecv1 和 chanrecv2 傳入的 block 參數的值是 true，都是阻塞方式，所以我們分析 chanrecv 的實現的時候，不考慮 block=false 的情況。</p>
 <p>第一部分是 chan 為 nil 的情況。和 send 一樣，從 nil chan 中接收（讀取、獲取）數據時，調用者會被永遠阻塞。</p>
-<pre><code>  // 第二部分, block=false且c為空
+<pre><code class="language-go">  // 第二部分, block=false且c為空
     if !block &amp;&amp; empty(c) {
       ......
     }
 </code></pre>
 <p>第二部分你可以直接忽略，因為不是我們這次要分析的場景。</p>
-<pre><code>        // 加鎖，返回時釋放鎖
+<pre><code class="language-go">        // 加鎖，返回時釋放鎖
       lock(&amp;c.lock)
       // 第三部分，c已經被close,且chan為空empty
     if c.closed != 0 &amp;&amp; c.qcount == 0 {
@@ -435,14 +435,14 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
     }
 </code></pre>
 <p>第三部分是 chan 已經被 close 的情況。如果 chan 已經被 close 了，並且隊列中沒有緩存的元素，那麼返回 true、false。</p>
-<pre><code>      // 第四部分，如果sendq隊列中有等待發送的sender
+<pre><code class="language-go">      // 第四部分，如果sendq隊列中有等待發送的sender
         if sg := c.sendq.dequeue(); sg != nil {
       recv(c, sg, ep, func() { unlock(&amp;c.lock) }, 3)
       return true, true
     }
 </code></pre>
 <p>第四部分是處理 sendq 隊列中有等待者的情況。這個時候，如果 buf 中有數據，優先從 buf 中讀取數據，否則直接從等待隊列中彈出一個 sender，把它的數據複製給這個 receiver。</p>
-<pre><code>      // 第五部分, 沒有等待的sender, buf中有數據
+<pre><code class="language-go">      // 第五部分, 沒有等待的sender, buf中有數據
     if c.qcount &gt; 0 {
       qp := chanbuf(c, c.recvx)
       if ep != nil {
@@ -472,7 +472,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <p>通過 close 函數，可以把 chan 關閉，編譯器會替換成 closechan 方法的調用。</p>
 <p>下面的代碼是 close chan 的主要邏輯。如果 chan 為 nil，close 會 panic；如果 chan 已經 closed，再次 close 也會 panic。否則的話，如果 chan 不為 nil，chan 也沒有 closed，就把等待隊列中的 sender（writer）和 receiver（reader）從隊列中全部移除並喚醒。</p>
 <p>下面的代碼就是 close chan 的邏輯:</p>
-<pre><code>    func closechan(c *hchan) {
+<pre><code class="language-go">    func closechan(c *hchan) {
     if c == nil { // chan為nil, panic
       panic(plainError("close of nil channel"))
     }
@@ -524,7 +524,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <li>close 已經 close 的 chan。</li>
 </ol>
 <p>goroutine 洩漏的問題也很常見，下面的代碼也是一個實際項目中的例子：</p>
-<pre><code>func process(timeout time.Duration) bool {
+<pre><code class="language-go">func process(timeout time.Duration) bool {
     ch := make(chan bool)
 
     go func() {

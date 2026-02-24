@@ -193,7 +193,7 @@
 <p>RWMutex 的零值是未加鎖的狀態，所以，當你使用 RWMutex 的時候，無論是聲明變量，還是嵌入到其它 struct 中，都不必顯式地初始化。</p>
 <p>我以計數器為例，來說明一下，如何使用 RWMutex 保護共享資源。計數器的 <strong>count++<strong><strong>操作是</strong></strong>寫</strong>操作，而獲取 count 的值是<strong>讀</strong>操作，這個場景非常適合讀寫鎖，因為讀操作可以並行執行，寫操作時只允許一個線程執行，這正是 readers-writers 問題。</p>
 <p>在這個例子中，使用 10 個 goroutine 進行讀操作，每讀取一次，sleep 1 毫秒，同時，還有一個 gorotine 進行寫操作，每一秒寫一次，這是一個 <strong>1</strong> writer-<strong>n</strong> reader 的讀寫場景，而且寫操作還不是很頻繁（一秒一次）：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var counter Counter
     for i := 0; i &lt; 10; i++ { // 10個reader
         go func() {
@@ -243,7 +243,7 @@ func (c *Counter) Count() uint64 {
 </ol>
 <p><strong>Go 標準庫中的 RWMutex 設計是 Write-preferring 方案。一個正在阻塞的 Lock 調用會排除新的 reader 請求到鎖。</strong></p>
 <p>RWMutex 包含一個 Mutex，以及四個輔助字段 writerSem、readerSem、readerCount 和 readerWait：</p>
-<pre><code>type RWMutex struct {
+<pre><code class="language-go">type RWMutex struct {
   w           Mutex   // 互斥鎖解決多個writer的競爭
   writerSem   uint32  // writer信號量
   readerSem   uint32  // reader信號量
@@ -264,7 +264,7 @@ const rwmutexMaxReaders = 1 &lt;&lt; 30
 <p>好了，知道了 RWMutex 的設計方案和具體字段，下面我來解釋一下具體的方法實現。</p>
 <h2 id="rlockrunlock-的實現"><a class="header" href="#rlockrunlock-的實現">RLock/RUnlock 的實現</a></h2>
 <p>首先，我們看一下移除了 race 等無關緊要的代碼後的 RLock 和 RUnlock 方法：</p>
-<pre><code>func (rw *RWMutex) RLock() {
+<pre><code class="language-go">func (rw *RWMutex) RLock() {
     if atomic.AddInt32(&amp;rw.readerCount, 1) &lt; 0 {
             // rw.readerCount是負值的時候，意味著此時有writer等待請求鎖，因為writer優先級高，所以把後來的reader阻塞休眠
         runtime_SemacquireMutex(&amp;rw.readerSem, false, 0)
@@ -294,7 +294,7 @@ func (rw *RWMutex) rUnlockSlow(r int32) {
 <p>RWMutex 是一個多 writer 多 reader 的讀寫鎖，所以同時可能有多個 writer 和 reader。那麼，為了避免 writer 之間的競爭，RWMutex 就會使用一個 Mutex 來保證 writer 的互斥。</p>
 <p>一旦一個 writer 獲得了內部的互斥鎖，就會反轉 readerCount 字段，把它從原來的正整數 readerCount(&gt;=0) 修改為負數（readerCount-rwmutexMaxReaders），讓這個字段保持兩個含義（既保存了 reader 的數量，又表示當前有 writer）。</p>
 <p>我們來看下下面的代碼。第 5 行，還會記錄當前活躍的 reader 數量，所謂活躍的 reader，就是指持有讀鎖還沒有釋放的那些 reader。</p>
-<pre><code>func (rw *RWMutex) Lock() {
+<pre><code class="language-go">func (rw *RWMutex) Lock() {
     // 首先解決其他writer競爭問題
     rw.w.Lock()
     // 反轉readerCount，告訴reader有writer競爭鎖
@@ -311,7 +311,7 @@ func (rw *RWMutex) rUnlockSlow(r int32) {
 <p>當一個 writer 釋放鎖的時候，它會再次反轉 readerCount 字段。可以肯定的是，因為當前鎖由 writer 持有，所以，readerCount 字段是反轉過的，並且減去了 rwmutexMaxReaders 這個常數，變成了負數。所以，這裡的反轉方法就是給它增加 rwmutexMaxReaders 這個常數值。</p>
 <p>既然 writer 要釋放鎖了，那麼就需要喚醒之後新來的 reader，不必再阻塞它們了，讓它們開開心心地繼續執行就好了。</p>
 <p>在 RWMutex 的 Unlock 返回之前，需要把內部的互斥鎖釋放。釋放完畢後，其他的 writer 才可以繼續競爭這把鎖。</p>
-<pre><code>func (rw *RWMutex) Unlock() {
+<pre><code class="language-go">func (rw *RWMutex) Unlock() {
     // 告訴reader沒有活躍的writer了
     r := atomic.AddInt32(&amp;rw.readerCount, rwmutexMaxReaders)
     
@@ -345,7 +345,7 @@ func (rw *RWMutex) rUnlockSlow(r int32) {
 <h2 id="坑點-2重入導致死鎖"><a class="header" href="#坑點-2重入導致死鎖">坑點 2：重入導致死鎖</a></h2>
 <p>讀寫鎖因為重入（或遞歸調用）導致死鎖的情況更多。</p>
 <p>我先介紹第一種情況。因為讀寫鎖內部基於互斥鎖實現對 writer 的併發訪問，而互斥鎖本身是有重入問題的，所以，writer 重入調用 Lock 的時候，就會出現死鎖的現象，這個問題，我們在學習互斥鎖的時候已經瞭解過了。</p>
-<pre><code>func foo(l *sync.RWMutex) {
+<pre><code class="language-go">func foo(l *sync.RWMutex) {
     fmt.Println("in foo")
     l.Lock()
     bar(l)
@@ -369,7 +369,7 @@ func main() {
 <p>當一個 writer 請求鎖的時候，如果已經有一些活躍的 reader，它會等待這些活躍的 reader 完成，才有可能獲取到鎖，但是，如果之後活躍的 reader 再依賴新的 reader 的話，這些新的 reader 就會等待 writer 釋放鎖之後才能繼續執行，這就形成了一個環形依賴： <strong>writer 依賴活躍的 reader -&gt; 活躍的 reader 依賴新來的 reader -&gt; 新來的 reader 依賴 writer</strong>。</p>
 <p><img src="./images/9b71245dcbc14ea2a34565e3ba5097e1.png" alt="" /></p>
 <p>這個死鎖相當隱蔽，原因在於它和 RWMutex 的設計和實現有關。啥意思呢？我們來看一個計算階乘 (n!) 的例子：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var mu sync.RWMutex
 
     // writer,稍微等待，然後製造一個調用Lock的場景

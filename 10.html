@@ -181,13 +181,13 @@
 <p>今天呢，我們就先來學習 Go 語言內建的這個 map 類型，瞭解它的基本使用方法和使用陷阱，然後再學習如何實現線程安全的 map 類型，最後我還會給你介紹 Go 標準庫中線程安全的 sync.Map 類型。學完了這節課，你可以學會幾種可以併發訪問的 map 類型。</p>
 <h2 id="map-的基本使用方法"><a class="header" href="#map-的基本使用方法">map 的基本使用方法</a></h2>
 <p>Go 內建的 map 類型如下：</p>
-<pre><code>map[K]V
+<pre><code class="language-go">map[K]V
 </code></pre>
 <p>其中，<strong>key 類型的 K 必須是可比較的</strong>（comparable），也就是可以通過 == 和 != 操作符進行比較；value 的值和類型無所謂，可以是任意的類型，或者為 nil。</p>
 <p>在 Go 語言中，bool、整數、浮點數、複數、字符串、指針、Channel、接口都是可比較的，包含可比較元素的 struct 和數組，這倆也是可比較的，而 slice、map、函數值都是不可比較的。</p>
 <p>那麼，上面這些可比較的數據類型都可以作為 map 的 key 嗎？顯然不是。通常情況下，我們會選擇內建的基本類型，比如整數、字符串做 key 的類型，因為這樣最方便。</p>
 <p>這裡有一點需要注意，如果使用 struct 類型做 key 其實是有坑的，因為如果 struct 的某個字段值修改了，查詢 map 時無法獲取它 add 進去的值，如下面的例子：</p>
-<pre><code>type mapKey struct {
+<pre><code class="language-go">type mapKey struct {
     key int
 }
 
@@ -205,7 +205,7 @@ func main() {
 </code></pre>
 <p>那該怎麼辦呢？如果要使用 struct 作為 key，我們要保證 struct 對象在邏輯上是不可變的，這樣才會保證 map 的邏輯沒有問題。</p>
 <p>以上就是選取 key 類型的注意點了。接下來，我們看一下使用 map[key]函數時需要注意的一個知識點。<strong>在 Go 中，map[key]函數返回結果可以是一個值，也可以是兩個值</strong>，這是容易讓人迷惑的地方。原因在於，如果獲取一個不存在的 key 對應的值時，會返回零值。為了區分真正的零值和 key 不存在這兩種情況，可以根據第二個返回值來區分，如下面的代碼的第 6 行、第 7 行：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m = make(map[string]int)
     m["a"] = 0
     fmt.Printf("a=%d; b=%d\n", m["a"], m["b"])
@@ -221,20 +221,20 @@ func main() {
 <p>那接下來，我們來看使用 map 最常犯的兩個錯誤，就是<strong>未初始化</strong>和<strong>併發讀寫</strong>。</p>
 <h3 id="常見錯誤一未初始化"><a class="header" href="#常見錯誤一未初始化">常見錯誤一：未初始化</a></h3>
 <p>和 slice 或者 Mutex、RWmutex 等 struct 類型不同，map 對象必須在使用之前初始化。如果不初始化就直接賦值的話，會出現 panic 異常，比如下面的例子，m 實例還沒有初始化就直接進行操作會導致 panic（第 3 行）:</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m map[int]int
     m[100] = 100
 }
 </code></pre>
 <p>解決辦法就是在第 2 行初始化這個實例（m := make(map[int]int)）。</p>
 <p>從一個 nil 的 map 對象中獲取值不會 panic，而是會得到零值，所以下面的代碼不會報錯:</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m map[int]int
     fmt.Println(m[100])
 }
 </code></pre>
 <p>這個例子很簡單，我們可以意識到 map 的初始化問題。但有時候 map 作為一個 struct 字段的時候，就很容易忘記初始化了。</p>
-<pre><code>type Counter struct {
+<pre><code class="language-go">type Counter struct {
     Website      string
     Start        time.Time
     PageCounters map[string]int
@@ -252,7 +252,7 @@ func main() {
 <p>對於 map 類型，另一個很容易犯的錯誤就是併發訪問問題。這個易錯點，相當令人討厭，如果沒有注意到併發問題，程序在運行的時候就有可能出現併發讀寫導致的 panic。</p>
 <p>Go 內建的 map 對象不是線程（goroutine）安全的，併發讀寫的時候運行時會有檢查，遇到併發問題就會導致 panic。</p>
 <p>我們一起看一個併發訪問 map 實例導致 panic 的例子：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m = make(map[int]int,10) // 初始化一個map
     go func() {
         for {
@@ -281,7 +281,7 @@ func main() {
 <p>比較遺憾的是，目前 Go 還沒有正式發佈泛型特性，我們還不能實現一個通用的支持泛型的加鎖 map。但是，將要發佈的泛型方案已經可以驗證測試了，離發佈也不遠了，也許發佈之後 sync.Map 就支持泛型了。</p>
 <p>當然了，如果沒有泛型支持，我們也能解決這個問題。我們可以通過 interface{}來模擬泛型，但還是要涉及接口和具體類型的轉換，比較複雜，還不如將要發佈的泛型方案更直接、性能更好。</p>
 <p>這裡我以一個具體的 map 類型為例，來演示利用讀寫鎖實現線程安全的 map[int]int 類型：</p>
-<pre><code>type RWMap struct { // 一個讀寫鎖保護的線程安全的map
+<pre><code class="language-go">type RWMap struct { // 一個讀寫鎖保護的線程安全的map
     sync.RWMutex // 讀寫鎖保護下面的map字段
     m map[int]int
 }
@@ -334,7 +334,7 @@ func (m *RWMap) Each(f func(k, v int) bool) { // 遍歷map
 <p>你可以優化業務處理的代碼，以此來減少鎖的持有時間，比如將串行的操作變成並行的子任務執行。不過，這就是另外的故事了，今天我們還是主要講對同步原語的優化，所以這裡我重點講如何減少鎖的粒度。</p>
 <p><strong>減少鎖的粒度常用的方法就是分片</strong>（Shard），將一把鎖分成幾把鎖，每個鎖控制一個分片。Go 比較知名的分片併發 map 的實現是orcaman/concurrent-map。</p>
 <p>它默認採用 32 個分片，<strong>GetShard 是一個關鍵的方法，能夠根據 key 計算出分片索引</strong>。</p>
-<pre><code>    var SHARD_COUNT = 32
+<pre><code class="language-go">    var SHARD_COUNT = 32
   
     // 分成SHARD_COUNT個分片的map
   type ConcurrentMap []*ConcurrentMapShared
@@ -361,7 +361,7 @@ func (m *RWMap) Each(f func(k, v int) bool) { // 遍歷map
   }
 </code></pre>
 <p>增加或者查詢的時候，首先根據分片索引得到分片對象，然後對分片對象加鎖進行操作：</p>
-<pre><code>func (m ConcurrentMap) Set(key string, value interface{}) {
+<pre><code class="language-go">func (m ConcurrentMap) Set(key string, value interface{}) {
     // 根據key計算出對應的分片
     shard := m.GetShard(key)
     shard.Lock() //對這個分片加鎖，執行業務操作
@@ -403,7 +403,7 @@ func (m ConcurrentMap) Get(key string) (interface{}, bool) {
 </ol>
 <p>要理解 sync.Map 這些優化點，我們還是得深入到它的設計和實現上，去學習它的處理方式。</p>
 <p>我們先看一下 map 的數據結構：</p>
-<pre><code>type Map struct {
+<pre><code class="language-go">type Map struct {
     mu Mutex
     // 基本上你可以把它看成一個安全的只讀的map
     // 它包含的元素其實也是通過原子操作更新的，但是已刪除的entry就需要加鎖操作了
@@ -437,7 +437,7 @@ type entry struct {
 <p>Store、Load 和 Delete 這三個核心函數的操作都是先從 read 字段中處理的，因為讀取 read 字段的時候不用加鎖。</p>
 <h4 id="store-方法"><a class="header" href="#store-方法">Store 方法</a></h4>
 <p>我們先來看 Store 方法，它是用來設置一個鍵值對，或者更新一個鍵值對的。</p>
-<pre><code>func (m *Map) Store(key, value interface{}) {
+<pre><code class="language-go">func (m *Map) Store(key, value interface{}) {
     read, _ := m.read.Load().(readOnly)
     // 如果read字段包含這個項，說明是更新，cas更新項目的值即可
     if e, ok := read.m[key]; ok &amp;&amp; e.tryStore(&amp;value) {
@@ -470,7 +470,7 @@ type entry struct {
 <p>可以看出，Store 既可以是新增元素，也可以是更新元素。如果運氣好的話，更新的是已存在的未被刪除的元素，直接更新即可，不會用到鎖。如果運氣不好，需要更新（重用）刪除的對象、更新還未提升的 dirty 中的對象，或者新增加元素的時候就會使用到了鎖，這個時候，性能就會下降。</p>
 <p>所以從這一點來看，sync.Map 適合那些只會增長的緩存系統，可以進行更新，但是不要刪除，並且不要頻繁地增加新元素。</p>
 <p>新加的元素需要放入到 dirty 中，如果 dirty 為 nil，那麼需要從 read 字段中複製出來一個 dirty 對象：</p>
-<pre><code>func (m *Map) dirtyLocked() {
+<pre><code class="language-go">func (m *Map) dirtyLocked() {
     if m.dirty != nil { // 如果dirty字段已經存在，不需要創建了
         return
     }
@@ -508,7 +508,7 @@ func (m *Map) Load(key interface{}) (value interface{}, ok bool) {
 </code></pre>
 <p>如果幸運的話，我們從 read 中讀取到了這個 key 對應的值，那麼就不需要加鎖了，性能會非常好。但是，如果請求的 key 不存在或者是新加的，就需要加鎖從 dirty 中讀取。所以，讀取不存在的 key 會因為加鎖而導致性能下降，讀取還沒有提升的新值的情況下也會因為加鎖性能下降。</p>
 <p>其中，missLocked 增加 miss 的時候，如果 miss 數等於 dirty 長度，會將 dirty 提升為 read，並將 dirty 置空。</p>
-<pre><code>func (m *Map) missLocked() {
+<pre><code class="language-go">func (m *Map) missLocked() {
     m.misses++ // misses計數加一
     if m.misses &lt; len(m.dirty) { // 如果沒達到閾值(dirty字段的長度),返回
         return
@@ -519,7 +519,7 @@ func (m *Map) Load(key interface{}) (value interface{}, ok bool) {
 }Delete 方法sync.map 的第 3 個核心方法是 Delete 方法。在 Go 1.15 中歐長坤提供了一個 LoadAndDelete 的實現（go#issue 33762），所以 Delete 方法的核心改在了對 LoadAndDelete 中實現了。
 </code></pre>
 <p>同樣地，Delete 方法是先從 read 操作開始，原因我們已經知道了，因為不需要鎖。</p>
-<pre><code>func (m *Map) LoadAndDelete(key interface{}) (value interface{}, loaded bool) {
+<pre><code class="language-go">func (m *Map) LoadAndDelete(key interface{}) (value interface{}, loaded bool) {
     read, _ := m.read.Load().(readOnly)
     e, ok := read.m[key]
     if !ok &amp;&amp; read.amended {

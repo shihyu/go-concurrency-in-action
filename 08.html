@@ -189,7 +189,7 @@
 <h2 id="cond-的基本用法"><a class="header" href="#cond-的基本用法">Cond 的基本用法</a></h2>
 <p>標準庫中的 Cond 併發原語初始化的時候，需要關聯一個 Locker 接口的實例，一般我們使用 Mutex 或者 RWMutex。</p>
 <p>我們看一下 Cond 的實現：</p>
-<pre><code>type Cond
+<pre><code class="language-go">type Cond
   func NeWCond(l Locker) *Cond
   func (c *Cond) Broadcast()
   func (c *Cond) Signal()
@@ -207,7 +207,7 @@
 <p>知道了 Cond 提供的三個方法後，我們再通過一個百米賽跑開始時的例子，來學習下 <strong>Cond 的使用方法</strong>。10 個運動員進入賽場之後需要先做拉伸活動活動筋骨，向觀眾和粉絲招手致敬，在自己的賽道上做好準備；等所有的運動員都準備好之後，裁判員才會打響發令槍。</p>
 <p>每個運動員做好準備之後，將 ready 加一，表明自己做好準備了，同時調用 Broadcast 方法通知裁判員。因為裁判員只有一個，所以這裡可以直接替換成 Signal 方法調用。調用 Broadcast 方法的時候，我們並沒有請求 c.L 鎖，只是在更改等待變量的時候才使用到了鎖。</p>
 <p>裁判員會等待運動員都準備好（第 22 行）。雖然每個運動員準備好之後都喚醒了裁判員，但是裁判員被喚醒之後需要檢查等待條件是否滿足（<strong>運動員都準備好了</strong>）。可以看到，裁判員被喚醒之後一定要檢查等待條件，如果條件不滿足還是要繼續等待。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     c := sync.NewCond(&amp;sync.Mutex{})
     var ready int
 
@@ -241,7 +241,7 @@
 <p>我們繼續看看 Cond 的實現原理。</p>
 <h2 id="cond-的實現原理"><a class="header" href="#cond-的實現原理">Cond 的實現原理</a></h2>
 <p>其實，Cond 的實現非常簡單，或者說複雜的邏輯已經被 Locker 或者 runtime 的等待隊列實現了。我們直接看看 Cond 的源碼吧。</p>
-<pre><code>type Cond struct {
+<pre><code class="language-go">type Cond struct {
     noCopy noCopy
 
     // 當觀察或者修改等待條件的時候需要加鎖
@@ -285,7 +285,7 @@ func (c *Cond) Broadcast() {
 <h2 id="使用-cond-的-2-個常見錯誤"><a class="header" href="#使用-cond-的-2-個常見錯誤">使用 Cond 的 2 個常見錯誤</a></h2>
 <p>我們先看 <strong>Cond 最常見的使用錯誤，也就是調用 Wait 的時候沒有加鎖</strong>。</p>
 <p>以前面百米賽跑的程序為例，在調用 cond.Wait 時，把前後的 Lock/Unlock 註釋掉，如下面的代碼中的第 20 行和第 25 行：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     c := sync.NewCond(&amp;sync.Mutex{})
     var ready int
 
@@ -319,7 +319,7 @@ func (c *Cond) Broadcast() {
 <p><img src="./images/cc46f66d94db422b3cb08e4f83a661c8.png" alt="" /></p>
 <p>出現這個問題的原因在於，cond.Wait 方法的實現是，把當前調用者加入到 notify 隊列之中後會釋放鎖（如果不釋放鎖，其他 Wait 的調用者就沒有機會加入到 notify 隊列中了），然後一直等待；等調用者被喚醒之後，又會去爭搶這把鎖。如果調用 Wait 之前不加鎖的話，就有可能 Unlock 一個未加鎖的 Locker。所以切記，<strong>調用 cond.Wait 方法之前一定要加鎖</strong>。</p>
 <p>使用 Cond 的另一個常見錯誤是，只調用了一次 Wait，沒有檢查等待條件是否滿足，結果條件沒滿足，程序就繼續執行了。出現這個問題的原因在於，誤以為 Cond 的使用，就像 WaitGroup 那樣調用一下 Wait 方法等待那麼簡單。比如下面的代碼中，把第 21 行和第 24 行註釋掉：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     c := sync.NewCond(&amp;sync.Mutex{})
     var ready int
 
@@ -366,7 +366,7 @@ func (c *Cond) Broadcast() {
 <p>Kubernetes 項目中定義了優先級隊列 PriorityQueue 這樣一個數據結構，用來實現 Pod 的調用。它內部有三個 Pod 的隊列，即 activeQ、podBackoffQ 和 unschedulableQ，其中 activeQ 就是用來調度的活躍隊列（heap）。</p>
 <p>Pop 方法調用的時候，如果這個隊列為空，並且這個隊列沒有 Close 的話，會調用 Cond 的 Wait 方法等待。</p>
 <p>你可以看到，調用 Wait 方法的時候，調用者是持有鎖的，並且被喚醒的時候檢查等待條件（隊列是否為空）。</p>
-<pre><code>// 從隊列中取出一個元素
+<pre><code class="language-go">// 從隊列中取出一個元素
 func (p *PriorityQueue) Pop() (*framework.QueuedPodInfo, error) {
     p.lock.Lock()
     defer p.lock.Unlock()
@@ -381,7 +381,7 @@ func (p *PriorityQueue) Pop() (*framework.QueuedPodInfo, error) {
   }
 </code></pre>
 <p>當 activeQ 增加新的元素時，會調用條件變量的 Boradcast 方法，通知被 Pop 阻塞的調用者。</p>
-<pre><code>// 增加元素到隊列中
+<pre><code class="language-go">// 增加元素到隊列中
 func (p *PriorityQueue) Add(pod *v1.Pod) error {
     p.lock.Lock()
     defer p.lock.Unlock()
@@ -397,7 +397,7 @@ func (p *PriorityQueue) Add(pod *v1.Pod) error {
   }
 </code></pre>
 <p>這個優先級隊列被關閉的時候，也會調用 Broadcast 方法，避免被 Pop 阻塞的調用者永遠 hang 住。</p>
-<pre><code>func (p *PriorityQueue) Close() {
+<pre><code class="language-go">func (p *PriorityQueue) Close() {
     p.lock.Lock()
     defer p.lock.Unlock()
     close(p.stop)

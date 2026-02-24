@@ -252,7 +252,7 @@
 <p>在正式看 Mutex 用法之前呢，我想先給你交代一件事：Locker 接口。</p>
 <p>在 Go 的標準庫中，package sync 提供了鎖相關的一系列同步原語，這個 package 還定義了一個 Locker 的接口，Mutex 就實現了這個接口。</p>
 <p>Locker 的接口定義了鎖同步原語的方法集：</p>
-<pre><code>type Locker interface {
+<pre><code class="language-go">type Locker interface {
     Lock()
     Unlock()
 }
@@ -262,13 +262,13 @@
 <p>我們這一講介紹的 Mutex 以及後面會介紹的讀寫鎖 RWMutex 都實現了 Locker 接口，所以首先我把這個接口介紹了，讓你做到心中有數。</p>
 <p>下面我們直接看 Mutex。</p>
 <p>簡單來說，<strong>互斥鎖 Mutex 就提供兩個方法 Lock 和 Unlock：進入臨界區之前調用 Lock 方法，退出臨界區的時候調用 Unlock 方法</strong>：</p>
-<pre><code>  func(m *Mutex)Lock()
+<pre><code class="language-go">  func(m *Mutex)Lock()
   func(m *Mutex)Unlock()
 </code></pre>
 <p><strong>當一個 goroutine 通過調用 Lock 方法獲得了這個鎖的擁有權後， 其它請求鎖的 goroutine 就會阻塞在 Lock 方法的調用上，直到鎖被釋放並且自己獲取到了這個鎖的擁有權。</strong></p>
 <p>看到這兒，你可能會問，為啥一定要加鎖呢？別急，我帶你來看一個併發訪問場景中不使用鎖的例子，看看實現起來會出現什麼狀況。</p>
 <p>在這個例子中，我們創建了 10 個 goroutine，同時不斷地對一個變量（count）進行加 1 操作，每個 goroutine 負責執行 10 萬次的加 1 操作，我們期望的最後計數的結果是 10 * 100000 = 1000000 (一百萬)。</p>
-<pre><code> import (
+<pre><code class="language-go"> import (
         "fmt"
         "sync"
     )
@@ -298,7 +298,7 @@
 <p>這是為什麼呢？</p>
 <p>其實，這是因為，<strong>count++</strong> 不是一個原子操作，它至少包含幾個步驟，比如讀取變量 count 的當前值，對這個值加 1，把結果再保存到 count 中。因為不是原子操作，就可能有併發的問題。</p>
 <p>比如，10 個 goroutine 同時讀取到 count 的值為 9527，接著各自按照自己的邏輯加 1，值變成了 9528，然後把這個結果再寫回到 count 變量。但是，實際上，此時我們增加的總數應該是 10 才對，這裡卻只增加了 1，好多計數都被“吞”掉了。這是併發訪問共享數據的常見錯誤。</p>
-<pre><code> // count++操作的彙編代碼
+<pre><code class="language-go"> // count++操作的彙編代碼
     MOVQ    "".count(SB), AX
     LEAQ    1(AX), CX
     MOVQ    CX, "".count(SB)
@@ -314,7 +314,7 @@
 <p>例子中的 goroutine 10 對內存地址 0x00c000126010 有讀的操作（counter.go 文件第 16 行），同時，goroutine 7 對內存地址 0x00c000126010 有寫的操作（counter.go 文件第 16 行）。而且還可能有多個 goroutine 在同時進行讀寫，所以，警告信息可能會很長。</p>
 <p>雖然這個工具使用起來很方便，但是，因為它的實現方式，只能通過真正對實際地址進行讀寫訪問的時候才能探測，所以它並不能在編譯的時候發現 data race 的問題。而且，在運行的時候，只有在觸發了 data race 之後，才能檢測到，如果碰巧沒有觸發（比如一個 data race 問題只能在 2 月 14 號零點或者 11 月 11 號零點才出現），是檢測不出來的。</p>
 <p>而且，把開啟了 race 的程序部署在線上，還是比較影響性能的。運行 go tool compile -race -S counter.go，可以查看計數器例子的代碼，重點關注一下 count++ 前後的編譯後的代碼：</p>
-<pre><code>0x002a 00042 (counter.go:13)    CALL    runtime.racefuncenter(SB)
+<pre><code class="language-go">0x002a 00042 (counter.go:13)    CALL    runtime.racefuncenter(SB)
        ......
         0x0061 00097 (counter.go:14)    JMP     173
         0x0063 00099 (counter.go:15)    MOVQ    AX, "".j+8(SP)
@@ -342,7 +342,7 @@
 <p>既然這個例子存在 data race 問題，我們就要想辦法來解決它。這個時候，我們這節課的主角 Mutex 就要登場了，它可以輕鬆地消除掉 data race。</p>
 <p>具體怎麼做呢？下面，我就結合這個例子，來具體給你講一講 Mutex 的基本用法。</p>
 <p>我們知道，這裡的共享資源是 count 變量，臨界區是 count++，只要在臨界區前面獲取鎖，在離開臨界區的時候釋放鎖，就能完美地解決 data race 的問題了。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
     import (
         "fmt"
@@ -381,14 +381,14 @@
 <p>這裡有一點需要注意：Mutex 的零值是還沒有 goroutine 等待的未加鎖的狀態，所以你不需要額外的初始化，直接聲明變量（如 var mu sync.Mutex）即可。</p>
 <p>那 Mutex 還有哪些用法呢？</p>
 <p>很多情況下，<strong>Mutex 會嵌入到其它 struct 中使用</strong>，比如下面的方式：</p>
-<pre><code>type Counter struct {
+<pre><code class="language-go">type Counter struct {
     mu    sync.Mutex
     Count uint64
 }
 </code></pre>
 <p>在初始化嵌入的 struct 時，也不必初始化這個 Mutex 字段，不會因為沒有初始化出現空指針或者是無法獲取到鎖的情況。</p>
 <p>有時候，我們還可以<strong>採用嵌入字段的方式</strong>。通過嵌入字段，你可以在這個 struct 上直接調用 Lock/Unlock 方法。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var counter Counter
     var wg sync.WaitGroup
     wg.Add(10)
@@ -413,7 +413,7 @@ type Counter struct {
 </code></pre>
 <p>**如果嵌入的 struct 有多個字段，我們一般會把 Mutex 放在要控制的字段上面，然後使用空格把字段分隔開來。**即使你不這樣做，代碼也可以正常編譯，只不過，用這種風格去寫的話，邏輯會更清晰，也更易於維護。</p>
 <p>甚至，你還可以<strong>把獲取鎖、釋放鎖、計數加一的邏輯封裝成一個方法</strong>，對外不需要暴露鎖等邏輯：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     // 封裝好的計數器
     var counter Counter
 
@@ -476,7 +476,7 @@ func (c *Counter) Count() uint64 {
 <p>我們先來看怎麼實現一個最簡單的互斥鎖。在開始之前，你可以先想一想，如果是你，你會怎麼設計呢？</p>
 <p>你可能會想到，可以通過一個 flag 變量，標記當前的鎖是否被某個 goroutine 持有。如果這個 flag 的值是 1，就代表鎖已經被持有，那麼，其它競爭的 goroutine 只能等待；如果這個 flag 的值是 0，就可以通過 CAS（compare-and-swap，或者 compare-and-set）將這個 flag 設置為 1，標識鎖被當前的這個 goroutine 持有了。</p>
 <p>實際上，Russ Cox 在 2008 年提交的第一版 Mutex 就是這樣實現的。</p>
-<pre><code>   // CAS操作，當時還沒有抽象出atomic包
+<pre><code class="language-go">   // CAS操作，當時還沒有抽象出atomic包
     func cas(val *int32, old, new int32) bool
     func semacquire(*int32)
     func semrelease(*int32)
@@ -533,7 +533,7 @@ func (c *Counter) Count() uint64 {
 <p>所以，我們在使用 Mutex 的時候，必須要保證 goroutine 儘可能不去釋放自己未持有的鎖，一定要遵循“<strong>誰申請，誰釋放</strong>”的原則。在真實的實踐中，我們使用互斥鎖的時候，很少在一個方法中單獨申請鎖，而在另外一個方法中單獨釋放鎖，一般都會在同一個方法中獲取鎖和釋放鎖。</p>
 <p>如果你接觸過其它語言（比如 Java 語言）的互斥鎖的實現，就會發現這一點和其它語言的互斥鎖不同，所以，如果是從其它語言轉到 Go 語言開發的同學，一定要注意。</p>
 <p>以前，我們經常會基於性能的考慮，及時釋放掉鎖，所以在一些 if-else 分支中加上釋放鎖的代碼，代碼看起來很臃腫。而且，在重構的時候，也很容易因為誤刪或者是漏掉而出現死鎖的現象。</p>
-<pre><code>type Foo struct {
+<pre><code class="language-go">type Foo struct {
     mu    sync.Mutex
     count int
 }
@@ -553,7 +553,7 @@ func (f *Foo) Bar() {
 }
 </code></pre>
 <p>從 1.14 版本起，Go 對 defer 做了優化，採用更有效的內聯方式，取代之前的生成 defer 對象到 defer chain 中，defer 對耗時的影響微乎其微了，所以基本上修改成下面簡潔的寫法也沒問題：</p>
-<pre><code>func (f *Foo) Bar() {
+<pre><code class="language-go">func (f *Foo) Bar() {
     f.mu.Lock()
     defer f.mu.Unlock()
 
@@ -573,7 +573,7 @@ func (f *Foo) Bar() {
 <p>接下來，我們就繼續探索 Go 開發者是怎麼解決這個問題的。</p>
 <h1 id="給新人機會"><a class="header" href="#給新人機會">給新人機會</a></h1>
 <p>Go 開發者在 2011 年 6 月 30 日的 commit 中對 Mutex 做了一次大的調整，調整後的 Mutex 實現如下：</p>
-<pre><code>   type Mutex struct {
+<pre><code class="language-go">   type Mutex struct {
         state int32
         sema  uint32
     }
@@ -588,7 +588,7 @@ func (f *Foo) Bar() {
 <p><img src="./images/3f39023e811a9d7557ae18ec3502bf4e.png" alt="" /></p>
 <p>state 是一個複合型的字段，一個字段包含多個意義，這樣可以通過儘可能少的內存來實現互斥鎖。這個字段的第一位（最小的一位）來表示這個鎖是否被持有，第二位代表是否有喚醒的 goroutine，剩餘的位數代表的是等待此鎖的 goroutine 數。所以，state 這一個字段被分成了三部分，代表三個數據。</p>
 <p>請求鎖的方法 Lock 也變得複雜了。複雜之處不僅僅在於對字段 state 的操作難以理解，而且代碼邏輯也變得相當複雜。</p>
-<pre><code>   func (m *Mutex) Lock() {
+<pre><code class="language-go">   func (m *Mutex) Lock() {
         // Fast path: 幸運case，能夠直接獲取到鎖
         if atomic.CompareAndSwapInt32(&amp;m.state, 0, mutexLocked) {
             return
@@ -625,7 +625,7 @@ func (f *Foo) Bar() {
 <p>請求鎖的 goroutine 有兩類，一類是新來請求鎖的 goroutine，另一類是被喚醒的等待請求鎖的 goroutine。鎖的狀態也有兩種：加鎖和未加鎖。我用一張表格，來說明一下 goroutine 不同來源不同狀態下的處理邏輯。</p>
 <p><img src="./images/1dd95f067c4a53169dc0cdfa06a5b12a.png" alt="" /></p>
 <p>剛剛說的都是獲取鎖，接下來，我們再來看看釋放鎖。釋放鎖的 Unlock 方法也有些複雜，我們來看一下。</p>
-<pre><code>   func (m *Mutex) Unlock() {
+<pre><code class="language-go">   func (m *Mutex) Unlock() {
         // Fast path: drop lock bit.
         new := atomic.AddInt32(&amp;m.state, -mutexLocked) //去掉鎖標誌
         if (new+mutexLocked)&amp;mutexLocked == 0 { //本來就沒有加鎖
@@ -656,7 +656,7 @@ func (f *Foo) Bar() {
 <p>雖然這一版的 Mutex 已經給新來請求鎖的 goroutine 一些機會，讓它參與競爭，沒有空閒的鎖或者競爭失敗才加入到等待隊列中。但是其實還可以進一步優化。我們接著往下看。</p>
 <h1 id="多給些機會"><a class="header" href="#多給些機會">多給些機會</a></h1>
 <p>在 2015 年 2 月的改動中，如果新來的 goroutine 或者是被喚醒的 goroutine 首次獲取不到鎖，它們就會通過自旋（spin，通過循環不斷嘗試，spin 的邏輯是在runtime 實現的）的方式，嘗試檢查鎖是否被釋放。在嘗試一定的自旋次數後，再執行原來的邏輯。</p>
-<pre><code>   func (m *Mutex) Lock() {
+<pre><code class="language-go">   func (m *Mutex) Lock() {
         // Fast path: 幸運之路，正好獲取到鎖
         if atomic.CompareAndSwapInt32(&amp;m.state, 0, mutexLocked) {
             return
@@ -708,7 +708,7 @@ func (f *Foo) Bar() {
 <p>當然，現在的 Mutex 代碼已經複雜得接近不可讀的狀態了，而且代碼也非常長，刪減後佔了幾乎三頁紙。但是，作為第一個要詳細介紹的同步原語，我還是希望能更清楚地剖析 Mutex 的實現，向你展示它的演化和為了一個貌似很小的 feature 不得不將代碼變得非常複雜的原因。</p>
 <p><img src="./images/bf361c9b5c1a47ab071df0a6a8801237.png" alt="" /></p>
 <p>當然，你也可以暫時略過這一段，以後慢慢品，<strong>只需要記住，Mutex 絕不容忍一個 goroutine 被落下，永遠沒有機會獲取鎖。不拋棄不放棄是它的宗旨，而且它也儘可能地讓等待較長的 goroutine 更有機會獲取到鎖</strong>。</p>
-<pre><code>   type Mutex struct {
+<pre><code class="language-go">   type Mutex struct {
         state int32
         sema  uint32
     }
@@ -898,7 +898,7 @@ func (f *Foo) Bar() {
 </ol>
 <p>在這種情況下，鎖被獲取之後，就不會被釋放了，這也就意味著，其它的 goroutine 永遠都沒機會獲取到鎖。</p>
 <p>我們再來看缺少 Lock 的場景，這就很簡單了，一般來說就是誤操作刪除了 Lock。 比如先前使用 Mutex 都是正常的，結果後來其他人重構代碼的時候，由於對代碼不熟悉，或者由於開發者的馬虎，把 Lock 調用給刪除了，或者註釋掉了。比如下面的代碼，mu.Lock() 一行代碼被刪除了，直接 Unlock 一個未加鎖的 Mutex 會 panic：</p>
-<pre><code>func foo() {
+<pre><code class="language-go">func foo() {
     var mu sync.Mutex
     defer mu.Unlock()
     fmt.Println("hello world!")
@@ -910,7 +910,7 @@ func (f *Foo) Bar() {
 <p>第二種誤用是 Copy 已使用的 Mutex。在正式分析這個錯誤之前，我先交代一個小知識點，那就是 Package sync 的同步原語在使用後是不能複製的。我們知道 Mutex 是最常用的一個同步原語，那它也是不能複製的。為什麼呢？</p>
 <p>原因在於，Mutex 是一個有狀態的對象，它的 state 字段記錄這個鎖的狀態。如果你要複製一個已經加鎖的 Mutex 給一個新的變量，那麼新的剛初始化的變量居然被加鎖了，這顯然不符合你的期望，因為你期望的是一個零值的 Mutex。關鍵是在併發環境下，你根本不知道要複製的 Mutex 狀態是什麼，因為要複製的 Mutex 是由其它 goroutine 併發訪問的，狀態可能總是在變化。</p>
 <p>當然，你可能說，你說的我都懂，你的警告我都記下了，但是實際在使用的時候，一不小心就踩了這個坑，我們來看一個例子。</p>
-<pre><code>type Counter struct {
+<pre><code class="language-go">type Counter struct {
     sync.Mutex
     Count int
 }
@@ -938,7 +938,7 @@ func foo(c Counter) {
 <p>你看，使用這個工具就可以發現 Mutex 複製的問題，錯誤信息顯示得很清楚，是在調用 foo 函數的時候發生了 lock value 複製的情況，還告訴我們出問題的代碼行數以及 copy lock 導致的錯誤。</p>
 <p>那麼，vet 工具是怎麼發現 Mutex 複製使用問題的呢？我帶你簡單分析一下。</p>
 <p>檢查是通過copylock分析器靜態分析實現的。這個分析器會分析函數調用、range 遍歷、複製、聲明、函數返回值等位置，有沒有鎖的值 copy 的情景，以此來判斷有沒有問題。可以說，只要是實現了 Locker 接口，就會被分析。我們看到，下面的代碼就是確定什麼類型會被分析，其實就是實現了 Lock/Unlock 兩個方法的 Locker 接口：</p>
-<pre><code>var lockerType *types.Interface
+<pre><code class="language-go">var lockerType *types.Interface
   
   // Construct a sync.Locker interface type.
   func init() {
@@ -959,7 +959,7 @@ func foo(c Counter) {
 <p>瞭解了可重入鎖的概念，那我們來看 Mutex 使用的錯誤場景。劃重點了：<strong>Mutex 不是可重入的鎖。</strong></p>
 <p>想想也不奇怪，因為 Mutex 的實現中沒有記錄哪個 goroutine 擁有這把鎖。理論上，任何 goroutine 都可以隨意地 Unlock 這把鎖，所以沒辦法計算重入條件，畢竟，“臣妾做不到啊”！</p>
 <p>所以，一旦誤用 Mutex 的重入，就會導致報錯。下面是一個誤用 Mutex 的重入例子：</p>
-<pre><code>func foo(l sync.Locker) {
+<pre><code class="language-go">func foo(l sync.Locker) {
     fmt.Println("in foo")
     l.Lock()
     bar(l)
@@ -990,12 +990,12 @@ func main() {
 <p><strong>方案一</strong>：<strong>goroutine id</strong></p>
 <p>這個方案的關鍵第一步是獲取 goroutine id，方式有兩種，分別是簡單方式和 hacker 方式。</p>
 <p>簡單方式，就是通過 runtime.Stack 方法獲取棧幀信息，棧幀信息裡包含 goroutine id。你可以看看上面 panic 時候的貼圖，goroutine id 明明白白地顯示在那裡。runtime.Stack 方法可以獲取當前的 goroutine 信息，第二個參數為 true 會輸出所有的 goroutine 信息，信息的格式如下：</p>
-<pre><code>goroutine 1 [running]:
+<pre><code class="language-go">goroutine 1 [running]:
 main.main()
         ....../main.go:19 +0xb1
 </code></pre>
 <p>第一行格式為 goroutine xxx，其中 xxx 就是 goroutine id，你只要解析出這個 id 即可。解析的方法可以採用下面的代碼：</p>
-<pre><code>func GoID() int {
+<pre><code class="language-go">func GoID() int {
     var buf [64]byte
     n := runtime.Stack(buf[:], false)
     // 得到id字符串
@@ -1015,7 +1015,7 @@ main.main()
 <p>需要注意的是，不同 Go 版本的 goroutine 的結構可能不同，所以需要根據 Go 的不同版本進行調整。當然了，如果想要搞清楚各個版本的 goroutine 結構差異，所涉及的內容又過於底層而且複雜，學習成本太高。怎麼辦呢？我們可以重點關注一些庫。我們沒有必要重複發明輪子，直接使用第三方的庫來獲取 goroutine id 就可以了。</p>
 <p>好消息是現在已經有很多成熟的方法了，可以支持多個 Go 版本的 goroutine id，給你推薦一個常用的庫：petermattis/goid。</p>
 <p>知道了如何獲取 goroutine id，接下來就是最後的關鍵一步了，我們實現一個可以使用的可重入鎖：</p>
-<pre><code>// RecursiveMutex 包裝一個Mutex,實現可重入
+<pre><code class="language-go">// RecursiveMutex 包裝一個Mutex,實現可重入
 type RecursiveMutex struct {
     sync.Mutex
     owner     int64 // 當前持有鎖的goroutine id
@@ -1056,7 +1056,7 @@ func (m *RecursiveMutex) Unlock() {
 <p><strong>方案二</strong>：<strong>token</strong></p>
 <p>方案一是用 goroutine id 做 goroutine 的標識，我們也可以讓 goroutine 自己來提供標識。不管怎麼說，Go 開發者不期望你利用 goroutine id 做一些不確定的東西，所以，他們沒有暴露獲取 goroutine id 的方法。</p>
 <p>下面的代碼是第二種方案。調用者自己提供一個 token，獲取鎖的時候把這個 token 傳入，釋放鎖的時候也需要把這個 token 傳入。通過用戶傳入的 token 替換方案一中 goroutine id，其它邏輯和方案一一致。</p>
-<pre><code>// Token方式的遞歸鎖
+<pre><code class="language-go">// Token方式的遞歸鎖
 type TokenRecursiveMutex struct {
     sync.Mutex
     token     int64
@@ -1101,7 +1101,7 @@ func (m *TokenRecursiveMutex) Unlock(token int64) {
 <p>你看，死鎖問題還真是挺有意思的，所以有很多人研究這個事兒。一個經典的死鎖問題就是哲學家就餐問題，我不做介紹了，你可以點擊鏈接進一步瞭解。其實，死鎖問題在現實生活中也比比皆是。</p>
 <p>舉個例子。有一次我去派出所開證明，派出所要求物業先證明我是本物業的業主，但是，物業要我提供派出所的證明，才能給我開物業證明，結果就陷入了死鎖狀態。你可以把派出所和物業看成兩個 goroutine，派出所證明和物業證明是兩個資源，雙方都持有自己的資源而要求對方的資源，而且自己的資源自己持有，不可剝奪。</p>
 <p>這是一個最簡單的只有兩個 goroutine 相互等待的死鎖的例子，轉化成代碼如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "fmt"
@@ -1214,7 +1214,7 @@ func main() {
 <p>在實際開發中，如果要更新配置數據，我們通常需要加鎖，這樣可以避免同時有多個 goroutine 併發修改數據。有的時候，我們也會使用 TryLock。這樣一來，當某個 goroutine 想要更改配置數據時，如果發現已經有 goroutine 在更改了，其他的 goroutine 調用 TryLock，返回了 false，這個 goroutine 就會放棄更改。</p>
 <p>很多語言（比如 Java）都為鎖提供了 TryLock 的方法，但是，Go 官方issue 6123有一個討論（後來一些 issue 中也提到過），標準庫的 Mutex 不會添加 TryLock 方法。雖然通過 Go 的 Channel 我們也可以實現 TryLock 的功能，但是基於 Channel 的實現我們會放在 Channel 那一講中去介紹，這一次我們還是基於 Mutex 去實現，畢竟大部分的程序員還是熟悉傳統的同步原語，而且傳統的同步原語也不容易出錯。所以這節課，還是希望帶你掌握基於 Mutex 實現的方法。</p>
 <p>那怎麼實現一個擴展 TryLock 方法的 Mutex 呢？我們直接來看代碼。</p>
-<pre><code>// 複製Mutex定義的常量
+<pre><code class="language-go">// 複製Mutex定義的常量
 const (
     mutexLocked = 1 &lt;&lt; iota // 加鎖標識位置
     mutexWoken              // 喚醒標識位置
@@ -1250,7 +1250,7 @@ func (m *Mutex) TryLock() bool {
 <p>如果沒有被持有，也沒有其它喚醒的 goroutine 來競爭鎖，鎖也不處於飢餓狀態，就嘗試獲取這把鎖（第 29 行），不論是否成功都將結果返回。因為，這個時候，可能還有其他的 goroutine 也在競爭這把鎖，所以，不能保證成功獲取這把鎖。</p>
 <p>我們可以寫一個簡單的測試程序，來測試我們的 TryLock 的機制是否工作。</p>
 <p>這個測試程序的工作機制是這樣子的：程序運行時會啟動一個 goroutine 持有這把我們自己實現的鎖，經過隨機的時間才釋放。主 goroutine 會嘗試獲取這把鎖。如果前一個 goroutine 一秒內釋放了這把鎖，那麼，主 goroutine 就有可能獲取到這把鎖了，輸出“got the lock”，否則沒有獲取到也不會被阻塞，會直接輸出“<code>can't get the lock</code>”。</p>
-<pre><code>func try() {
+<pre><code class="language-go">func try() {
     var mu Mutex
     go func() { // 啟動一個goroutine持有一段時間的鎖
         mu.Lock()
@@ -1273,14 +1273,14 @@ func (m *Mutex) TryLock() bool {
 }獲取等待者的數量等指標接下來，我想和你聊聊怎麼獲取等待者數量等指標。
 </code></pre>
 <p>第二講中，我們已經學習了 Mutex 的結構。先來回顧一下 Mutex 的數據結構，如下面的代碼所示。它包含兩個字段，state 和 sema。前四個字節（int32）就是 state 字段。</p>
-<pre><code>type Mutex struct {
+<pre><code class="language-go">type Mutex struct {
     state int32
     sema  uint32
 }
 </code></pre>
 <p>Mutex 結構中的 state 字段有很多個含義，通過 state 字段，你可以知道鎖是否已經被某個 goroutine 持有、當前是否處於飢餓狀態、是否有等待的 goroutine 被喚醒、等待者的數量等信息。但是，state 這個字段並沒有暴露出來，所以，我們需要想辦法獲取到這個字段，並進行解析。</p>
 <p>怎麼獲取未暴露的字段呢？很簡單，我們可以通過 unsafe 的方式實現。我來舉一個例子，你一看就明白了。</p>
-<pre><code>const (
+<pre><code class="language-go">const (
     mutexLocked = 1 &lt;&lt; iota // mutex is locked
     mutexWoken
     mutexStarving
@@ -1301,7 +1301,7 @@ func (m *Mutex) Count() int {
 </code></pre>
 <p>這個例子的第 14 行通過 unsafe 操作，我們可以得到 state 字段的值。第 15 行我們右移三位（這裡的常量 mutexWaiterShift 的值為 3），就得到了當前等待者的數量。如果當前的鎖已經被其他 goroutine 持有，那麼，我們就稍微調整一下這個值，加上一個 1（第 16 行），你基本上可以把它看作是當前持有和等待這把鎖的 goroutine 的總數。</p>
 <p>state 這個字段的第一位是用來標記鎖是否被持有，第二位用來標記是否已經喚醒了一個等待者，第三位標記鎖是否處於飢餓狀態，通過分析這個 state 字段我們就可以得到這些狀態信息。我們可以為這些狀態提供查詢的方法，這樣就可以即時地知道鎖的狀態了。</p>
-<pre><code>// 鎖是否被持有
+<pre><code class="language-go">// 鎖是否被持有
 func (m *Mutex) IsLocked() bool {
     state := atomic.LoadInt32((*int32)(unsafe.Pointer(&amp;m.Mutex)))
     return state&amp;mutexLocked == mutexLocked
@@ -1320,7 +1320,7 @@ func (m *Mutex) IsStarving() bool {
 }
 </code></pre>
 <p>我們可以寫一個程序測試一下，比如，在 1000 個 goroutine 併發訪問的情況下，我們可以把鎖的狀態信息輸出出來：</p>
-<pre><code>func count() {
+<pre><code class="language-go">func count() {
     var mu Mutex
     for i := 0; i &lt; 1000; i++ { // 啟動1000個goroutine
         go func() {
@@ -1340,7 +1340,7 @@ func (m *Mutex) IsStarving() bool {
 <p>最後，我們來討論一下，如何使用 Mutex 實現一個線程安全的隊列。</p>
 <p>為什麼要討論這個話題呢？因為 Mutex 經常會和其他非線程安全（對於 Go 來說，我們其實指的是 goroutine 安全）的數據結構一起，組合成一個線程安全的數據結構。新數據結構的業務邏輯由原來的數據結構提供，而 <strong>Mutex 提供了鎖的機制，<strong><strong>來</strong></strong>保證線程安全</strong>。</p>
 <p>比如隊列，我們可以通過 Slice 來實現，但是通過 Slice 實現的隊列不是線程安全的，出隊（Dequeue）和入隊（Enqueue）會有 data race 的問題。這個時候，Mutex 就要隆重出場了，通過它，我們可以在出隊和入隊的時候加上鎖的保護。</p>
-<pre><code>type SliceQueue struct {
+<pre><code class="language-go">type SliceQueue struct {
     data []interface{}
     mu   sync.Mutex
 }
@@ -1399,7 +1399,7 @@ func (q *SliceQueue) Dequeue() interface{} {
 <p>RWMutex 的零值是未加鎖的狀態，所以，當你使用 RWMutex 的時候，無論是聲明變量，還是嵌入到其它 struct 中，都不必顯式地初始化。</p>
 <p>我以計數器為例，來說明一下，如何使用 RWMutex 保護共享資源。計數器的 <strong>count++<strong><strong>操作是</strong></strong>寫</strong>操作，而獲取 count 的值是<strong>讀</strong>操作，這個場景非常適合讀寫鎖，因為讀操作可以並行執行，寫操作時只允許一個線程執行，這正是 readers-writers 問題。</p>
 <p>在這個例子中，使用 10 個 goroutine 進行讀操作，每讀取一次，sleep 1 毫秒，同時，還有一個 gorotine 進行寫操作，每一秒寫一次，這是一個 <strong>1</strong> writer-<strong>n</strong> reader 的讀寫場景，而且寫操作還不是很頻繁（一秒一次）：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var counter Counter
     for i := 0; i &lt; 10; i++ { // 10個reader
         go func() {
@@ -1449,7 +1449,7 @@ func (c *Counter) Count() uint64 {
 </ol>
 <p><strong>Go 標準庫中的 RWMutex 設計是 Write-preferring 方案。一個正在阻塞的 Lock 調用會排除新的 reader 請求到鎖。</strong></p>
 <p>RWMutex 包含一個 Mutex，以及四個輔助字段 writerSem、readerSem、readerCount 和 readerWait：</p>
-<pre><code>type RWMutex struct {
+<pre><code class="language-go">type RWMutex struct {
   w           Mutex   // 互斥鎖解決多個writer的競爭
   writerSem   uint32  // writer信號量
   readerSem   uint32  // reader信號量
@@ -1470,7 +1470,7 @@ const rwmutexMaxReaders = 1 &lt;&lt; 30
 <p>好了，知道了 RWMutex 的設計方案和具體字段，下面我來解釋一下具體的方法實現。</p>
 <h2 id="rlockrunlock-的實現"><a class="header" href="#rlockrunlock-的實現">RLock/RUnlock 的實現</a></h2>
 <p>首先，我們看一下移除了 race 等無關緊要的代碼後的 RLock 和 RUnlock 方法：</p>
-<pre><code>func (rw *RWMutex) RLock() {
+<pre><code class="language-go">func (rw *RWMutex) RLock() {
     if atomic.AddInt32(&amp;rw.readerCount, 1) &lt; 0 {
             // rw.readerCount是負值的時候，意味著此時有writer等待請求鎖，因為writer優先級高，所以把後來的reader阻塞休眠
         runtime_SemacquireMutex(&amp;rw.readerSem, false, 0)
@@ -1500,7 +1500,7 @@ func (rw *RWMutex) rUnlockSlow(r int32) {
 <p>RWMutex 是一個多 writer 多 reader 的讀寫鎖，所以同時可能有多個 writer 和 reader。那麼，為了避免 writer 之間的競爭，RWMutex 就會使用一個 Mutex 來保證 writer 的互斥。</p>
 <p>一旦一個 writer 獲得了內部的互斥鎖，就會反轉 readerCount 字段，把它從原來的正整數 readerCount(&gt;=0) 修改為負數（readerCount-rwmutexMaxReaders），讓這個字段保持兩個含義（既保存了 reader 的數量，又表示當前有 writer）。</p>
 <p>我們來看下下面的代碼。第 5 行，還會記錄當前活躍的 reader 數量，所謂活躍的 reader，就是指持有讀鎖還沒有釋放的那些 reader。</p>
-<pre><code>func (rw *RWMutex) Lock() {
+<pre><code class="language-go">func (rw *RWMutex) Lock() {
     // 首先解決其他writer競爭問題
     rw.w.Lock()
     // 反轉readerCount，告訴reader有writer競爭鎖
@@ -1517,7 +1517,7 @@ func (rw *RWMutex) rUnlockSlow(r int32) {
 <p>當一個 writer 釋放鎖的時候，它會再次反轉 readerCount 字段。可以肯定的是，因為當前鎖由 writer 持有，所以，readerCount 字段是反轉過的，並且減去了 rwmutexMaxReaders 這個常數，變成了負數。所以，這裡的反轉方法就是給它增加 rwmutexMaxReaders 這個常數值。</p>
 <p>既然 writer 要釋放鎖了，那麼就需要喚醒之後新來的 reader，不必再阻塞它們了，讓它們開開心心地繼續執行就好了。</p>
 <p>在 RWMutex 的 Unlock 返回之前，需要把內部的互斥鎖釋放。釋放完畢後，其他的 writer 才可以繼續競爭這把鎖。</p>
-<pre><code>func (rw *RWMutex) Unlock() {
+<pre><code class="language-go">func (rw *RWMutex) Unlock() {
     // 告訴reader沒有活躍的writer了
     r := atomic.AddInt32(&amp;rw.readerCount, rwmutexMaxReaders)
     
@@ -1551,7 +1551,7 @@ func (rw *RWMutex) rUnlockSlow(r int32) {
 <h2 id="坑點-2重入導致死鎖"><a class="header" href="#坑點-2重入導致死鎖">坑點 2：重入導致死鎖</a></h2>
 <p>讀寫鎖因為重入（或遞歸調用）導致死鎖的情況更多。</p>
 <p>我先介紹第一種情況。因為讀寫鎖內部基於互斥鎖實現對 writer 的併發訪問，而互斥鎖本身是有重入問題的，所以，writer 重入調用 Lock 的時候，就會出現死鎖的現象，這個問題，我們在學習互斥鎖的時候已經瞭解過了。</p>
-<pre><code>func foo(l *sync.RWMutex) {
+<pre><code class="language-go">func foo(l *sync.RWMutex) {
     fmt.Println("in foo")
     l.Lock()
     bar(l)
@@ -1575,7 +1575,7 @@ func main() {
 <p>當一個 writer 請求鎖的時候，如果已經有一些活躍的 reader，它會等待這些活躍的 reader 完成，才有可能獲取到鎖，但是，如果之後活躍的 reader 再依賴新的 reader 的話，這些新的 reader 就會等待 writer 釋放鎖之後才能繼續執行，這就形成了一個環形依賴： <strong>writer 依賴活躍的 reader -&gt; 活躍的 reader 依賴新來的 reader -&gt; 新來的 reader 依賴 writer</strong>。</p>
 <p><img src="./images/9b71245dcbc14ea2a34565e3ba5097e1.png" alt="" /></p>
 <p>這個死鎖相當隱蔽，原因在於它和 RWMutex 的設計和實現有關。啥意思呢？我們來看一個計算階乘 (n!) 的例子：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var mu sync.RWMutex
 
     // writer,稍微等待，然後製造一個調用Lock的場景
@@ -1647,7 +1647,7 @@ func factorial(m *sync.RWMutex, n int) int {
 <p>我們還是從 WaitGroup 的基本用法學起吧。</p>
 <h2 id="waitgroup-的基本用法"><a class="header" href="#waitgroup-的基本用法">WaitGroup 的基本用法</a></h2>
 <p>Go 標準庫中的 WaitGroup 提供了三個方法，保持了 Go 簡潔的風格。</p>
-<pre><code>    func (wg *WaitGroup) Add(delta int)
+<pre><code class="language-go">    func (wg *WaitGroup) Add(delta int)
     func (wg *WaitGroup) Done()
     func (wg *WaitGroup) Wait()
 </code></pre>
@@ -1659,7 +1659,7 @@ func factorial(m *sync.RWMutex, n int) int {
 </ol>
 <p>接下來，我們通過一個使用 WaitGroup 的例子，來看下 Add、Done、Wait 方法的基本用法。</p>
 <p>在這個例子中，我們使用了以前實現的計數器 struct。我們啟動了 10 個 worker，分別對計數值加一，10 個 worker 都完成後，我們期望輸出計數器的值。</p>
-<pre><code>// 線程安全的計數器
+<pre><code class="language-go">// 線程安全的計數器
 type Counter struct {
     mu    sync.Mutex
     count uint64
@@ -1714,7 +1714,7 @@ func main() {
 <li>state1，一個具有複合意義的字段，包含 WaitGroup 的計數、阻塞在檢查點的 waiter 數和信號量。</li>
 </ol>
 <p>WaitGroup 的數據結構定義以及 state 信息的獲取方法如下：</p>
-<pre><code>type WaitGroup struct {
+<pre><code class="language-go">type WaitGroup struct {
     // 避免複製使用的一個技巧，可以告訴vet工具違反了複製使用的規則
     noCopy noCopy
     // 64bit(8bytes)的值分成兩段，高32bit是計數值，低32bit是waiter的計數
@@ -1744,7 +1744,7 @@ func (wg *WaitGroup) state() (statep *uint64, semap *uint32) {
 <p>在查看這部分源碼實現時，我們會發現，除了這些方法本身的實現外，還會有一些額外的代碼，主要是 race 檢查和異常檢查的代碼。其中，有幾個檢查非常關鍵，如果檢查不通過，會出現 panic，這部分內容我會在下一小節分析 WaitGroup 的錯誤使用場景時介紹。現在，我們先專注在 Add、Wait 和 Done 本身的實現代碼上。</p>
 <p>我先為你梳理下 <strong>Add 方法的邏輯</strong>。Add 方法主要操作的是 state 的計數部分。你可以為計數值增加一個 delta 值，內部通過原子操作把這個值加到計數值上。需要注意的是，這個 delta 也可以是個負數，相當於為計數值減去一個值，Done 方法內部其實就是通過 Add(-1) 實現的。</p>
 <p>它的實現代碼如下：</p>
-<pre><code>func (wg *WaitGroup) Add(delta int) {
+<pre><code class="language-go">func (wg *WaitGroup) Add(delta int) {
     statep, semap := wg.state()
     // 高32bit是計數值v，所以把delta左移32，增加到計數上
     state := atomic.AddUint64(statep, uint64(delta)&lt;&lt;32)
@@ -1770,7 +1770,7 @@ func (wg *WaitGroup) Done() {
 </code></pre>
 <p>Wait 方法的實現邏輯是：不斷檢查 state 的值。如果其中的計數值變為了 0，那麼說明所有的任務已完成，調用者不必再等待，直接返回。如果計數值大於 0，說明此時還有任務沒完成，那麼調用者就變成了等待者，需要加入 waiter 隊列，並且阻塞住自己。</p>
 <p>其主幹實現代碼如下：</p>
-<pre><code>func (wg *WaitGroup) Wait() {
+<pre><code class="language-go">func (wg *WaitGroup) Wait() {
     statep, semap := wg.state()
     
     for {
@@ -1797,7 +1797,7 @@ func (wg *WaitGroup) Done() {
 <p>一般情況下，有兩種方法會導致計數器設置為負數。</p>
 <p>第一種方法是：<strong>調用 Add 的時候傳遞一個負數</strong>。如果你能保證當前的計數器加上這個負數後還是大於等於 0 的話，也沒有問題，否則就會導致 panic。</p>
 <p>比如下面這段代碼，計數器的初始值為 10，當第一次傳入 -10 的時候，計數值被設置為 0，不會有啥問題。但是，再緊接著傳入 -1 以後，計數值就被設置為負數了，程序就會出現 panic。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(10)
 
@@ -1810,7 +1810,7 @@ func (wg *WaitGroup) Done() {
 <p><strong>使用 WaitGroup 的正確姿勢是，預先確定好 WaitGroup 的計數值，然後調用相同次數的 Done 完成相應的任務</strong>。比如，在 WaitGroup 變量聲明之後，就立即設置它的計數值，或者在 goroutine 啟動之前增加 1，然後在 goroutine 中調用 Done。</p>
 <p>如果你沒有遵循這些規則，就很可能會導致 Done 方法調用的次數和計數值不一致，進而造成死鎖（Done 調用次數比計數值少）或者 panic（Done 調用次數比計數值多）。</p>
 <p>比如下面這個例子中，多調用了一次 Done 方法後，會導致計數值為負，所以程序運行到這一行會出現 panic。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(1)
 
@@ -1820,7 +1820,7 @@ func (wg *WaitGroup) Done() {
 }常見問題二：不期望的 Add 時機在使用 WaitGroup 的時候，你一定要遵循的原則就是，等所有的 Add 方法調用之後再調用 Wait，否則就可能導致 panic 或者不期望的結果。
 </code></pre>
 <p>我們構造這樣一個場景：只有部分的 Add/Done 執行完後，Wait 就返回。我們看一個例子：啟動四個 goroutine，每個 goroutine 內部調用 Add(1) 然後調用 Done()，主 goroutine 調用 Wait 等待任務完成。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     go dosomething(100, &amp;wg) // 啟動第一個goroutine
     go dosomething(110, &amp;wg) // 啟動第二個goroutine
@@ -1842,7 +1842,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 </code></pre>
 <p>在這個例子中，我們原本設想的是，等四個 goroutine 都執行完畢後輸出 Done 的信息，但是它的錯誤之處在於，將 WaitGroup.Add 方法的調用放在了子 gorotuine 中。等主 goorutine 調用 Wait 的時候，因為四個任務 goroutine 一開始都休眠，所以可能 WaitGroup 的 Add 方法還沒有被調用，WaitGroup 的計數還是 0，所以它並沒有等待四個子 goroutine 執行完畢才繼續執行，而是立刻執行了下一步。</p>
 <p>導致這個錯誤的原因是，沒有遵循先完成所有的 Add 之後才 Wait。要解決這個問題，一個方法是，預先設置計數值：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(4) // 預先設定WaitGroup的計數值
 
@@ -1864,7 +1864,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 }
 </code></pre>
 <p>另一種方法是在啟動子 goroutine 之前才調用 Add：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
 
     dosomething(100, &amp;wg) // 調用方法，把計數值加1，並啟動任務goroutine
@@ -1892,7 +1892,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 <p>“前一個 Wait 還沒結束就重用 WaitGroup”這一點似乎不太好理解，我借用田徑比賽的例子和你解釋下吧。在田徑比賽的百米小組賽中，需要把選手分成幾組，一組選手比賽完之後，就可以進行下一組了。為了確保兩組比賽時間上沒有衝突，我們在模型化這個場景的時候，可以使用 WaitGroup。</p>
 <p>WaitGroup 等一組比賽的所有選手都跑完後 5 分鐘，才開始下一組比賽。下一組比賽還可以使用這個 WaitGroup 來控制，因為 <strong>WaitGroup 是可以重用的</strong>。只要 WaitGroup 的計數值恢復到零值的狀態，那麼它就可以被看作是新創建的 WaitGroup，被重複使用。</p>
 <p>但是，如果我們在 WaitGroup 的計數值還沒有恢復到零值的時候就重用，就會導致程序 panic。我們看一個例子，初始設置 WaitGroup 的計數值為 1，啟動一個 goroutine 先調用 Done 方法，接著就調用 Add 方法，Add 方法有可能和主 goroutine 併發執行。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var wg sync.WaitGroup
     wg.Add(1)
     go func() {
@@ -1911,7 +1911,7 @@ func dosomething(millisecs time.Duration, wg *sync.WaitGroup) {
 <p>我們在第 3 講學習 Mutex 的時候用到了 vet 工具。vet 會對實現 Locker 接口的數據類型做靜態檢查，一旦代碼中有複製使用這種數據類型的情況，就會發出警告。但是，WaitGroup 同步原語不就是 Add、Done 和 Wait 方法嗎？vet 能檢查出來嗎？</p>
 <p>其實是可以的。通過給 WaitGroup 添加一個 noCopy 字段，我們就可以為 WaitGroup 實現 Locker 接口，這樣 vet 工具就可以做複製檢查了。而且因為 noCopy 字段是未輸出類型，所以 WaitGroup 不會暴露 Lock/Unlock 方法。</p>
 <p>noCopy 字段的類型是 noCopy，它只是一個輔助的、用來幫助 vet 檢查用的類型:</p>
-<pre><code>type noCopy struct{}
+<pre><code class="language-go">type noCopy struct{}
 
 // Lock is a no-op used by -copylocks checker from `go vet`.
 func (*noCopy) Lock()   {}
@@ -1921,7 +1921,7 @@ func (*noCopy) Unlock() {}
 <h2 id="流行的-go-開發項目中的坑-1"><a class="header" href="#流行的-go-開發項目中的坑-1">流行的 Go 開發項目中的坑</a></h2>
 <p>接下來又到了喝枸杞紅棗茶的時間了。你可以稍微休息一下，心態放輕鬆地跟我一起圍觀下知名項目犯過的錯，比如 copy Waitgroup、Add/Wait 併發執行問題、遺漏 Add 等 Bug。</p>
 <p>有網友在 Go 的issue 28123中提了以下的例子，你能發現這段代碼有什麼問題嗎？</p>
-<pre><code>type TestStruct struct {
+<pre><code class="language-go">type TestStruct struct {
   Wait sync.WaitGroup
 }
 
@@ -1971,7 +1971,7 @@ func main() {
 <h2 id="cond-的基本用法"><a class="header" href="#cond-的基本用法">Cond 的基本用法</a></h2>
 <p>標準庫中的 Cond 併發原語初始化的時候，需要關聯一個 Locker 接口的實例，一般我們使用 Mutex 或者 RWMutex。</p>
 <p>我們看一下 Cond 的實現：</p>
-<pre><code>type Cond
+<pre><code class="language-go">type Cond
   func NeWCond(l Locker) *Cond
   func (c *Cond) Broadcast()
   func (c *Cond) Signal()
@@ -1989,7 +1989,7 @@ func main() {
 <p>知道了 Cond 提供的三個方法後，我們再通過一個百米賽跑開始時的例子，來學習下 <strong>Cond 的使用方法</strong>。10 個運動員進入賽場之後需要先做拉伸活動活動筋骨，向觀眾和粉絲招手致敬，在自己的賽道上做好準備；等所有的運動員都準備好之後，裁判員才會打響發令槍。</p>
 <p>每個運動員做好準備之後，將 ready 加一，表明自己做好準備了，同時調用 Broadcast 方法通知裁判員。因為裁判員只有一個，所以這裡可以直接替換成 Signal 方法調用。調用 Broadcast 方法的時候，我們並沒有請求 c.L 鎖，只是在更改等待變量的時候才使用到了鎖。</p>
 <p>裁判員會等待運動員都準備好（第 22 行）。雖然每個運動員準備好之後都喚醒了裁判員，但是裁判員被喚醒之後需要檢查等待條件是否滿足（<strong>運動員都準備好了</strong>）。可以看到，裁判員被喚醒之後一定要檢查等待條件，如果條件不滿足還是要繼續等待。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     c := sync.NewCond(&amp;sync.Mutex{})
     var ready int
 
@@ -2023,7 +2023,7 @@ func main() {
 <p>我們繼續看看 Cond 的實現原理。</p>
 <h2 id="cond-的實現原理"><a class="header" href="#cond-的實現原理">Cond 的實現原理</a></h2>
 <p>其實，Cond 的實現非常簡單，或者說複雜的邏輯已經被 Locker 或者 runtime 的等待隊列實現了。我們直接看看 Cond 的源碼吧。</p>
-<pre><code>type Cond struct {
+<pre><code class="language-go">type Cond struct {
     noCopy noCopy
 
     // 當觀察或者修改等待條件的時候需要加鎖
@@ -2067,7 +2067,7 @@ func (c *Cond) Broadcast() {
 <h2 id="使用-cond-的-2-個常見錯誤"><a class="header" href="#使用-cond-的-2-個常見錯誤">使用 Cond 的 2 個常見錯誤</a></h2>
 <p>我們先看 <strong>Cond 最常見的使用錯誤，也就是調用 Wait 的時候沒有加鎖</strong>。</p>
 <p>以前面百米賽跑的程序為例，在調用 cond.Wait 時，把前後的 Lock/Unlock 註釋掉，如下面的代碼中的第 20 行和第 25 行：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     c := sync.NewCond(&amp;sync.Mutex{})
     var ready int
 
@@ -2101,7 +2101,7 @@ func (c *Cond) Broadcast() {
 <p><img src="./images/cc46f66d94db422b3cb08e4f83a661c8.png" alt="" /></p>
 <p>出現這個問題的原因在於，cond.Wait 方法的實現是，把當前調用者加入到 notify 隊列之中後會釋放鎖（如果不釋放鎖，其他 Wait 的調用者就沒有機會加入到 notify 隊列中了），然後一直等待；等調用者被喚醒之後，又會去爭搶這把鎖。如果調用 Wait 之前不加鎖的話，就有可能 Unlock 一個未加鎖的 Locker。所以切記，<strong>調用 cond.Wait 方法之前一定要加鎖</strong>。</p>
 <p>使用 Cond 的另一個常見錯誤是，只調用了一次 Wait，沒有檢查等待條件是否滿足，結果條件沒滿足，程序就繼續執行了。出現這個問題的原因在於，誤以為 Cond 的使用，就像 WaitGroup 那樣調用一下 Wait 方法等待那麼簡單。比如下面的代碼中，把第 21 行和第 24 行註釋掉：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     c := sync.NewCond(&amp;sync.Mutex{})
     var ready int
 
@@ -2148,7 +2148,7 @@ func (c *Cond) Broadcast() {
 <p>Kubernetes 項目中定義了優先級隊列 PriorityQueue 這樣一個數據結構，用來實現 Pod 的調用。它內部有三個 Pod 的隊列，即 activeQ、podBackoffQ 和 unschedulableQ，其中 activeQ 就是用來調度的活躍隊列（heap）。</p>
 <p>Pop 方法調用的時候，如果這個隊列為空，並且這個隊列沒有 Close 的話，會調用 Cond 的 Wait 方法等待。</p>
 <p>你可以看到，調用 Wait 方法的時候，調用者是持有鎖的，並且被喚醒的時候檢查等待條件（隊列是否為空）。</p>
-<pre><code>// 從隊列中取出一個元素
+<pre><code class="language-go">// 從隊列中取出一個元素
 func (p *PriorityQueue) Pop() (*framework.QueuedPodInfo, error) {
     p.lock.Lock()
     defer p.lock.Unlock()
@@ -2163,7 +2163,7 @@ func (p *PriorityQueue) Pop() (*framework.QueuedPodInfo, error) {
   }
 </code></pre>
 <p>當 activeQ 增加新的元素時，會調用條件變量的 Boradcast 方法，通知被 Pop 阻塞的調用者。</p>
-<pre><code>// 增加元素到隊列中
+<pre><code class="language-go">// 增加元素到隊列中
 func (p *PriorityQueue) Add(pod *v1.Pod) error {
     p.lock.Lock()
     defer p.lock.Unlock()
@@ -2179,7 +2179,7 @@ func (p *PriorityQueue) Add(pod *v1.Pod) error {
   }
 </code></pre>
 <p>這個優先級隊列被關閉的時候，也會調用 Broadcast 方法，避免被 Pop 阻塞的調用者永遠 hang 住。</p>
-<pre><code>func (p *PriorityQueue) Close() {
+<pre><code class="language-go">func (p *PriorityQueue) Close() {
     p.lock.Lock()
     defer p.lock.Unlock()
     close(p.stop)
@@ -2206,14 +2206,14 @@ func (p *PriorityQueue) Add(pod *v1.Pod) error {
 <p>這一講我來講一個簡單的併發原語：Once。為什麼要學習 Once 呢？我先給你答案：<strong>Once 可以用來執行且僅僅執行一次動作，常常用於單例對象的初始化場景。</strong></p>
 <p>那這節課，我們就從對單例對象進行初始化這件事兒說起。</p>
 <p>初始化單例資源有很多方法，比如定義 package 級別的變量，這樣程序在啟動的時候就可以初始化：</p>
-<pre><code>package abc
+<pre><code class="language-go">package abc
 
 import time
 
 var startTime = time.Now()
 </code></pre>
 <p>或者在 init 函數中進行初始化：</p>
-<pre><code>package abc
+<pre><code class="language-go">package abc
 
 var startTime time.Time
 
@@ -2222,7 +2222,7 @@ func init() {
 }
 </code></pre>
 <p>又或者在 main 函數開始執行的時候，執行一個初始化的函數：</p>
-<pre><code>package abc
+<pre><code class="language-go">package abc
 
 var startTime time.Tim
 
@@ -2235,7 +2235,7 @@ func main() {
 </code></pre>
 <p>這三種方法都是線程安全的，並且後兩種方法還可以根據傳入的參數實現定製化的初始化操作。</p>
 <p>但是很多時候我們是要延遲進行初始化的，所以有時候單例資源的初始化，我們會使用下面的方法：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "net"
@@ -2273,10 +2273,10 @@ func main() {
 <p>這個時候就可以使用這一講要介紹的 Once 併發原語了。接下來我會詳細介紹 Once 的使用、實現和易錯場景。</p>
 <h1 id="once-的使用場景"><a class="header" href="#once-的使用場景">Once 的使用場景</a></h1>
 <p><strong>sync.Once 只暴露了一個方法 Do，你可以多次調用 Do 方法，但是隻有第一次調用 Do 方法時 f 參數才會執行，這裡的 f 是一個無參數無返回值的函數。</strong></p>
-<pre><code>func (o *Once) Do(f func())
+<pre><code class="language-go">func (o *Once) Do(f func())
 </code></pre>
 <p>因為當且僅當第一次調用 Do 方法的時候參數 f 才會執行，即使第二次、第三次、第 n 次調用時 f 參數的值不一樣，也不會被執行，比如下面的例子，雖然 f1 和 f2 是不同的函數，但是第二個函數 f2 就不會執行。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "fmt"
@@ -2300,7 +2300,7 @@ func main() {
 }
 </code></pre>
 <p>因為這裡的 f 參數是一個無參數無返回的函數，所以你可能會通過閉包的方式引用外面的參數，比如：</p>
-<pre><code>    var addr = "baidu.com"
+<pre><code class="language-go">    var addr = "baidu.com"
 
     var conn net.Conn
     var err error
@@ -2312,7 +2312,7 @@ func main() {
 <p>而且在實際的使用中，絕大多數情況下，你會使用閉包的方式去初始化外部的一個資源。</p>
 <p>你看，Once 的使用場景很明確，所以，在標準庫內部實現中也常常能看到 Once 的身影。</p>
 <p>比如標準庫內部cache的實現上，就使用了 Once 初始化 Cache 資源，包括 defaultDir 值的獲取：</p>
-<pre><code>    func Default() *Cache { // 獲取默認的Cache
+<pre><code class="language-go">    func Default() *Cache { // 獲取默認的Cache
     defaultOnce.Do(initDefaultCache) // 初始化cache
     return defaultCache
   }
@@ -2336,7 +2336,7 @@ func main() {
   )
 </code></pre>
 <p>還有一些測試的時候初始化測試的資源（export_windows_test）：</p>
-<pre><code>    // 測試window系統調用時區相關函數
+<pre><code class="language-go">    // 測試window系統調用時區相關函數
     func ForceAusFromTZIForTesting() {
     ResetLocalOnceForTest()
         // 使用Once執行一次初始化
@@ -2344,7 +2344,7 @@ func main() {
   }
 </code></pre>
 <p>除此之外，還有保證只調用一次 copyenv 的 envOnce，strings 包下的 Replacer，time 包中的測試，Go 拉取庫時的proxy，net.pipe，crc64，Regexp，…，數不勝數。我給你重點介紹一下很值得我們學習的 math/big/sqrt.go 中實現的一個數據結構，它通過 Once 封裝了一個只初始化一次的值：</p>
-<pre><code>   // 值是3.0或者0.0的一個數據結構
+<pre><code class="language-go">   // 值是3.0或者0.0的一個數據結構
    var threeOnce struct {
     sync.Once
     v *Float
@@ -2364,7 +2364,7 @@ func main() {
 <p>瞭解了 Once 的使用場景，那應該怎樣實現一個 Once 呢？</p>
 <h1 id="如何實現一個-once"><a class="header" href="#如何實現一個-once">如何實現一個 Once？</a></h1>
 <p>很多人認為實現一個 Once 一樣的併發原語很簡單，只需使用一個 flag 標記是否初始化過即可，最多是用 atomic 原子操作這個 flag，比如下面的實現：</p>
-<pre><code>type Once struct {
+<pre><code class="language-go">type Once struct {
     done uint32
 }
 
@@ -2379,7 +2379,7 @@ func (o *Once) Do(f func()) {
 <p>所以，<strong>一個正確的 Once 實現要使用一個互斥鎖，<strong><strong>這樣初始化的時候如果有併發的 goroutine，就會進入</strong></strong>doSlow 方法</strong>。互斥鎖的機制保證只有一個 goroutine 進行初始化，同時利用<strong>雙檢查的機制</strong>（double-checking），再次判斷 o.done 是否為 0，如果為 0，則是第一次執行，執行完畢後，就將 o.done 設置為 1，然後釋放鎖。</p>
 <p>即使此時有多個 goroutine 同時進入了 doSlow 方法，因為雙檢查的機制，後續的 goroutine 會看到 o.done 的值為 1，也不會再次執行 f。</p>
 <p>這樣既保證了併發的 goroutine 會等待 f 完成，而且還不會多次執行 f。</p>
-<pre><code>type Once struct {
+<pre><code class="language-go">type Once struct {
     done uint32
     m    Mutex
 }
@@ -2404,7 +2404,7 @@ func (o *Once) doSlow(f func()) {
 <h1 id="使用-once-可能出現的-2-種錯誤"><a class="header" href="#使用-once-可能出現的-2-種錯誤">使用 Once 可能出現的 2 種錯誤</a></h1>
 <h2 id="第一種錯誤死鎖"><a class="header" href="#第一種錯誤死鎖">第一種錯誤：死鎖</a></h2>
 <p>你已經知道了 Do 方法會執行一次 f，但是如果 f 中再次調用這個 Once 的 Do 方法的話，就會導致死鎖的情況出現。這還不是無限遞歸的情況，而是的的確確的 Lock 的遞歸調用導致的死鎖。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var once sync.Once
     once.Do(func() {
         once.Do(func() {
@@ -2417,7 +2417,7 @@ func (o *Once) doSlow(f func()) {
 <h2 id="第二種錯誤未初始化"><a class="header" href="#第二種錯誤未初始化">第二種錯誤：未初始化</a></h2>
 <p>如果 f 方法執行的時候 panic，或者 f 執行初始化資源的時候失敗了，這個時候，Once 還是會認為初次執行已經成功了，即使再次調用 Do 方法，也不會再次執行 f。</p>
 <p>比如下面的例子，由於一些防火牆的原因，googleConn 並沒有被正確的初始化，後面如果想當然認為既然執行了 Do 方法 googleConn 就已經初始化的話，會拋出空指針的錯誤：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var once sync.Once
     var googleConn net.Conn // 到Google網站的一個連接
 
@@ -2432,7 +2432,7 @@ func (o *Once) doSlow(f func()) {
 </code></pre>
 <p>既然執行過 Once.Do 方法也可能因為函數執行失敗的原因未初始化資源，並且以後也沒機會再次初始化資源，那麼這種初始化未完成的問題該怎麼解決呢？</p>
 <p>這裡我來告訴你一招獨家秘笈，我們可以<strong>自己實現一個類似 Once 的併發原語</strong>，既可以返回當前調用 Do 方法是否正確完成，還可以在初始化失敗後調用 Do 方法再次嘗試初始化，直到初始化成功才不再初始化了。</p>
-<pre><code>// 一個功能更加強大的Once
+<pre><code class="language-go">// 一個功能更加強大的Once
 type Once struct {
     m    sync.Mutex
     done uint32
@@ -2463,7 +2463,7 @@ func (o *Once) slowDo(f func() error) error {
 <p>對 slowDo 方法也做了調整，如果 f 調用失敗，我們不會更改 done 字段的值，這樣後續 degoroutine 還會繼續調用 f。如果 f 執行成功，才會修改 done 的值為 1。</p>
 <p>可以說，真是一頓操作猛如虎，我們使用 Once 有點得心應手的感覺了。等等，還有個問題，我們怎麼查詢是否初始化過呢？</p>
 <p>目前的 Once 實現可以保證你調用任意次數的 once.Do 方法，它只會執行這個方法一次。但是，有時候我們需要打一個標記。如果初始化後我們就去執行其它的操作，標準庫的 Once 並不會告訴你是否初始化完成了，只是讓你放心大膽地去執行 Do 方法，所以，<strong>你還需要一個輔助變量，自己去檢查是否初始化過了</strong>，比如通過下面的代碼中的 inited 字段：</p>
-<pre><code>type AnimalStore struct {once   sync.Once;inited uint32}
+<pre><code class="language-go">type AnimalStore struct {once   sync.Once;inited uint32}
 func (a *AnimalStore) Init() // 可以被併發調用
   a.once.Do(func() {
     longOperationSetupDbOpenFilesQueuesEtc()
@@ -2478,7 +2478,7 @@ func (a *AnimalStore) CountOfCats() (int, error) { // 另外一個goroutine
 }
 </code></pre>
 <p>當然，通過這段代碼，我們可以解決這類問題，但是，如果官方的 Once 類型有 Done 這樣一個方法的話，我們就可以直接使用了。這是有人在 Go 代碼庫中提出的一個 issue(#41690)。對於這類問題，一般都會被建議採用其它類型，或者自己去擴展。我們可以嘗試擴展這個併發原語：</p>
-<pre><code>// Once 是一個擴展的sync.Once類型，提供了一個Done方法
+<pre><code class="language-go">// Once 是一個擴展的sync.Once類型，提供了一個Done方法
 type Once struct {
     sync.Once
 }
@@ -2506,7 +2506,7 @@ func main() {
 <p>所以查看大部分的 Go 項目，幾乎找不到 Once 的錯誤使用場景，不過我還是發現了一個。這個 issue 先從另外一個需求 (go#25955) 談起。</p>
 <h1 id="once-的踩坑案例"><a class="header" href="#once-的踩坑案例">Once 的踩坑案例</a></h1>
 <p>go#25955 有網友提出一個需求，希望 Once 提供一個 Reset 方法，能夠將 Once 重置為初始化的狀態。比如下面的例子，St 通過兩個 Once 控制它的 Open/Close 狀態。但是在 Close 之後再調用 Open 的話，不會再執行 init 函數，因為 Once 只會執行一次初始化函數。</p>
-<pre><code>type St struct {
+<pre><code class="language-go">type St struct {
     openOnce *sync.Once
     closeOnce *sync.Once
 }
@@ -2524,7 +2524,7 @@ func(st *St) Close(){
 <p>所以提交這個 Issue 的開發者希望 Once 增加一個 Reset 方法，Reset 之後再調用 once.Do 就又可以初始化了。</p>
 <p>Go 的核心開發者 Ian Lance Taylor 給他了一個簡單的解決方案。在這個例子中，只使用一個 ponce *sync.Once 做初始化，Reset 的時候給 ponce 這個變量賦值一個新的 Once 實例即可 (ponce = new(sync.Once))。Once 的本意就是執行一次，所以 Reset 破壞了這個併發原語的本意。</p>
 <p>這個解決方案一點都沒問題，可以很好地解決這位開發者的需求。Docker 較早的版本（1.11.2）中使用了它們的一個網絡庫 libnetwork，這個網絡庫在使用 Once 的時候就使用 Ian Lance Taylor 介紹的方法，但是不幸的是，它的 Reset 方法中又改變了 Once 指針的值，導致程序 panic 了。原始邏輯比較複雜，一個簡化版可重現的代碼如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
   "fmt"
@@ -2572,7 +2572,7 @@ func main() {
 <p><img src="./images/299410d2e97b8e267b67f676e7ca1b37.png" alt="" /></p>
 <p>原因在於第 31 行執行 m.Once.Do 方法的時候，使用的是 m.Once 的指針，然後調用 m.refresh，在執行 m.refresh 的時候 Once 內部的 Mutex 首先會加鎖（可以再翻看一下這一講的 Once 的實現原理）， 但是，在 refresh 中更改了 Once 指針的值之後，結果在執行完 refresh 釋放鎖的時候，釋放的是一個剛初始化未加鎖的 Mutex，所以就 panic 了。</p>
 <p>如果你還不太明白，我再給你簡化成一個更簡單的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "sync"
@@ -2601,10 +2601,10 @@ func main() {
 <p>今天我們一起學習了 Once，我們常常使用它來實現單例模式。</p>
 <p>單例是 23 種設計模式之一，也是常常引起爭議的設計模式之一，甚至有人把它歸為反模式。為什麼說它是反模式呢，我拿標準庫中的單例模式給你介紹下。</p>
 <p>因為 Go 沒有 immutable 類型，導致我們聲明的全局變量都是可變的，別的地方或者第三方庫可以隨意更改這些變量。比如 package io 中定義了幾個全局變量，比如 io.EOF：</p>
-<pre><code>var EOF = errors.New("EOF")
+<pre><code class="language-go">var EOF = errors.New("EOF")
 </code></pre>
 <p>因為它是一個 package 級別的變量，我們可以在程序中偷偷把它改了，這會導致一些依賴 io.EOF 這個變量做判斷的代碼出錯。</p>
-<pre><code>io.EOF = errors.New("我們自己定義的EOF")
+<pre><code class="language-go">io.EOF = errors.New("我們自己定義的EOF")
 </code></pre>
 <p>從我個人的角度來說，一些單例（全局變量）的確很方便，比如 Buffer 池或者連接池，所以有時候我們也不要談虎色變。雖然有人把單例模式稱之為反模式，但畢竟只能代表一部分開發者的觀點，否則也不會把它列在 23 種設計模式中了。</p>
 <p>如果你真的擔心這個 package 級別的變量被人修改，你可以不把它們暴露出來，而是提供一個只讀的 GetXXX 的方法，這樣別人就不會進行修改了。</p>
@@ -2623,13 +2623,13 @@ func main() {
 <p>今天呢，我們就先來學習 Go 語言內建的這個 map 類型，瞭解它的基本使用方法和使用陷阱，然後再學習如何實現線程安全的 map 類型，最後我還會給你介紹 Go 標準庫中線程安全的 sync.Map 類型。學完了這節課，你可以學會幾種可以併發訪問的 map 類型。</p>
 <h2 id="map-的基本使用方法"><a class="header" href="#map-的基本使用方法">map 的基本使用方法</a></h2>
 <p>Go 內建的 map 類型如下：</p>
-<pre><code>map[K]V
+<pre><code class="language-go">map[K]V
 </code></pre>
 <p>其中，<strong>key 類型的 K 必須是可比較的</strong>（comparable），也就是可以通過 == 和 != 操作符進行比較；value 的值和類型無所謂，可以是任意的類型，或者為 nil。</p>
 <p>在 Go 語言中，bool、整數、浮點數、複數、字符串、指針、Channel、接口都是可比較的，包含可比較元素的 struct 和數組，這倆也是可比較的，而 slice、map、函數值都是不可比較的。</p>
 <p>那麼，上面這些可比較的數據類型都可以作為 map 的 key 嗎？顯然不是。通常情況下，我們會選擇內建的基本類型，比如整數、字符串做 key 的類型，因為這樣最方便。</p>
 <p>這裡有一點需要注意，如果使用 struct 類型做 key 其實是有坑的，因為如果 struct 的某個字段值修改了，查詢 map 時無法獲取它 add 進去的值，如下面的例子：</p>
-<pre><code>type mapKey struct {
+<pre><code class="language-go">type mapKey struct {
     key int
 }
 
@@ -2647,7 +2647,7 @@ func main() {
 </code></pre>
 <p>那該怎麼辦呢？如果要使用 struct 作為 key，我們要保證 struct 對象在邏輯上是不可變的，這樣才會保證 map 的邏輯沒有問題。</p>
 <p>以上就是選取 key 類型的注意點了。接下來，我們看一下使用 map[key]函數時需要注意的一個知識點。<strong>在 Go 中，map[key]函數返回結果可以是一個值，也可以是兩個值</strong>，這是容易讓人迷惑的地方。原因在於，如果獲取一個不存在的 key 對應的值時，會返回零值。為了區分真正的零值和 key 不存在這兩種情況，可以根據第二個返回值來區分，如下面的代碼的第 6 行、第 7 行：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m = make(map[string]int)
     m["a"] = 0
     fmt.Printf("a=%d; b=%d\n", m["a"], m["b"])
@@ -2663,20 +2663,20 @@ func main() {
 <p>那接下來，我們來看使用 map 最常犯的兩個錯誤，就是<strong>未初始化</strong>和<strong>併發讀寫</strong>。</p>
 <h3 id="常見錯誤一未初始化"><a class="header" href="#常見錯誤一未初始化">常見錯誤一：未初始化</a></h3>
 <p>和 slice 或者 Mutex、RWmutex 等 struct 類型不同，map 對象必須在使用之前初始化。如果不初始化就直接賦值的話，會出現 panic 異常，比如下面的例子，m 實例還沒有初始化就直接進行操作會導致 panic（第 3 行）:</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m map[int]int
     m[100] = 100
 }
 </code></pre>
 <p>解決辦法就是在第 2 行初始化這個實例（m := make(map[int]int)）。</p>
 <p>從一個 nil 的 map 對象中獲取值不會 panic，而是會得到零值，所以下面的代碼不會報錯:</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m map[int]int
     fmt.Println(m[100])
 }
 </code></pre>
 <p>這個例子很簡單，我們可以意識到 map 的初始化問題。但有時候 map 作為一個 struct 字段的時候，就很容易忘記初始化了。</p>
-<pre><code>type Counter struct {
+<pre><code class="language-go">type Counter struct {
     Website      string
     Start        time.Time
     PageCounters map[string]int
@@ -2694,7 +2694,7 @@ func main() {
 <p>對於 map 類型，另一個很容易犯的錯誤就是併發訪問問題。這個易錯點，相當令人討厭，如果沒有注意到併發問題，程序在運行的時候就有可能出現併發讀寫導致的 panic。</p>
 <p>Go 內建的 map 對象不是線程（goroutine）安全的，併發讀寫的時候運行時會有檢查，遇到併發問題就會導致 panic。</p>
 <p>我們一起看一個併發訪問 map 實例導致 panic 的例子：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var m = make(map[int]int,10) // 初始化一個map
     go func() {
         for {
@@ -2723,7 +2723,7 @@ func main() {
 <p>比較遺憾的是，目前 Go 還沒有正式發佈泛型特性，我們還不能實現一個通用的支持泛型的加鎖 map。但是，將要發佈的泛型方案已經可以驗證測試了，離發佈也不遠了，也許發佈之後 sync.Map 就支持泛型了。</p>
 <p>當然了，如果沒有泛型支持，我們也能解決這個問題。我們可以通過 interface{}來模擬泛型，但還是要涉及接口和具體類型的轉換，比較複雜，還不如將要發佈的泛型方案更直接、性能更好。</p>
 <p>這裡我以一個具體的 map 類型為例，來演示利用讀寫鎖實現線程安全的 map[int]int 類型：</p>
-<pre><code>type RWMap struct { // 一個讀寫鎖保護的線程安全的map
+<pre><code class="language-go">type RWMap struct { // 一個讀寫鎖保護的線程安全的map
     sync.RWMutex // 讀寫鎖保護下面的map字段
     m map[int]int
 }
@@ -2776,7 +2776,7 @@ func (m *RWMap) Each(f func(k, v int) bool) { // 遍歷map
 <p>你可以優化業務處理的代碼，以此來減少鎖的持有時間，比如將串行的操作變成並行的子任務執行。不過，這就是另外的故事了，今天我們還是主要講對同步原語的優化，所以這裡我重點講如何減少鎖的粒度。</p>
 <p><strong>減少鎖的粒度常用的方法就是分片</strong>（Shard），將一把鎖分成幾把鎖，每個鎖控制一個分片。Go 比較知名的分片併發 map 的實現是orcaman/concurrent-map。</p>
 <p>它默認採用 32 個分片，<strong>GetShard 是一個關鍵的方法，能夠根據 key 計算出分片索引</strong>。</p>
-<pre><code>    var SHARD_COUNT = 32
+<pre><code class="language-go">    var SHARD_COUNT = 32
   
     // 分成SHARD_COUNT個分片的map
   type ConcurrentMap []*ConcurrentMapShared
@@ -2803,7 +2803,7 @@ func (m *RWMap) Each(f func(k, v int) bool) { // 遍歷map
   }
 </code></pre>
 <p>增加或者查詢的時候，首先根據分片索引得到分片對象，然後對分片對象加鎖進行操作：</p>
-<pre><code>func (m ConcurrentMap) Set(key string, value interface{}) {
+<pre><code class="language-go">func (m ConcurrentMap) Set(key string, value interface{}) {
     // 根據key計算出對應的分片
     shard := m.GetShard(key)
     shard.Lock() //對這個分片加鎖，執行業務操作
@@ -2845,7 +2845,7 @@ func (m ConcurrentMap) Get(key string) (interface{}, bool) {
 </ol>
 <p>要理解 sync.Map 這些優化點，我們還是得深入到它的設計和實現上，去學習它的處理方式。</p>
 <p>我們先看一下 map 的數據結構：</p>
-<pre><code>type Map struct {
+<pre><code class="language-go">type Map struct {
     mu Mutex
     // 基本上你可以把它看成一個安全的只讀的map
     // 它包含的元素其實也是通過原子操作更新的，但是已刪除的entry就需要加鎖操作了
@@ -2879,7 +2879,7 @@ type entry struct {
 <p>Store、Load 和 Delete 這三個核心函數的操作都是先從 read 字段中處理的，因為讀取 read 字段的時候不用加鎖。</p>
 <h4 id="store-方法"><a class="header" href="#store-方法">Store 方法</a></h4>
 <p>我們先來看 Store 方法，它是用來設置一個鍵值對，或者更新一個鍵值對的。</p>
-<pre><code>func (m *Map) Store(key, value interface{}) {
+<pre><code class="language-go">func (m *Map) Store(key, value interface{}) {
     read, _ := m.read.Load().(readOnly)
     // 如果read字段包含這個項，說明是更新，cas更新項目的值即可
     if e, ok := read.m[key]; ok &amp;&amp; e.tryStore(&amp;value) {
@@ -2912,7 +2912,7 @@ type entry struct {
 <p>可以看出，Store 既可以是新增元素，也可以是更新元素。如果運氣好的話，更新的是已存在的未被刪除的元素，直接更新即可，不會用到鎖。如果運氣不好，需要更新（重用）刪除的對象、更新還未提升的 dirty 中的對象，或者新增加元素的時候就會使用到了鎖，這個時候，性能就會下降。</p>
 <p>所以從這一點來看，sync.Map 適合那些只會增長的緩存系統，可以進行更新，但是不要刪除，並且不要頻繁地增加新元素。</p>
 <p>新加的元素需要放入到 dirty 中，如果 dirty 為 nil，那麼需要從 read 字段中複製出來一個 dirty 對象：</p>
-<pre><code>func (m *Map) dirtyLocked() {
+<pre><code class="language-go">func (m *Map) dirtyLocked() {
     if m.dirty != nil { // 如果dirty字段已經存在，不需要創建了
         return
     }
@@ -2950,7 +2950,7 @@ func (m *Map) Load(key interface{}) (value interface{}, ok bool) {
 </code></pre>
 <p>如果幸運的話，我們從 read 中讀取到了這個 key 對應的值，那麼就不需要加鎖了，性能會非常好。但是，如果請求的 key 不存在或者是新加的，就需要加鎖從 dirty 中讀取。所以，讀取不存在的 key 會因為加鎖而導致性能下降，讀取還沒有提升的新值的情況下也會因為加鎖性能下降。</p>
 <p>其中，missLocked 增加 miss 的時候，如果 miss 數等於 dirty 長度，會將 dirty 提升為 read，並將 dirty 置空。</p>
-<pre><code>func (m *Map) missLocked() {
+<pre><code class="language-go">func (m *Map) missLocked() {
     m.misses++ // misses計數加一
     if m.misses &lt; len(m.dirty) { // 如果沒達到閾值(dirty字段的長度),返回
         return
@@ -2961,7 +2961,7 @@ func (m *Map) Load(key interface{}) (value interface{}, ok bool) {
 }Delete 方法sync.map 的第 3 個核心方法是 Delete 方法。在 Go 1.15 中歐長坤提供了一個 LoadAndDelete 的實現（go#issue 33762），所以 Delete 方法的核心改在了對 LoadAndDelete 中實現了。
 </code></pre>
 <p>同樣地，Delete 方法是先從 read 操作開始，原因我們已經知道了，因為不需要鎖。</p>
-<pre><code>func (m *Map) LoadAndDelete(key interface{}) (value interface{}, loaded bool) {
+<pre><code class="language-go">func (m *Map) LoadAndDelete(key interface{}) (value interface{}, loaded bool) {
     read, _ := m.read.Load().(readOnly)
     e, ok := read.m[key]
     if !ok &amp;&amp; read.amended {
@@ -3042,7 +3042,7 @@ func (e *entry) delete() (value interface{}, ok bool) {
 <p>這個方法用於將一個元素返還給 Pool，Pool 會把這個元素保存到池中，並且可以複用。但如果 Put 一個 nil 值，Pool 就會忽略這個值。</p>
 <p>好了，瞭解了這幾個方法，下面我們看看 sync.Pool 最常用的一個場景：buffer 池（緩衝池）。</p>
 <p>因為 byte slice 是經常被創建銷燬的一類對象，使用 buffer 池可以緩存已經創建的 byte slice，比如，著名的靜態網站生成工具 Hugo 中，就包含這樣的實現bufpool，你可以看一下下面這段代碼：</p>
-<pre><code>var buffers = sync.Pool{
+<pre><code class="language-go">var buffers = sync.Pool{
   New: func() interface{} { 
     return new(bytes.Buffer)
   },
@@ -3071,7 +3071,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <p>每次垃圾回收的時候，Pool 會把 victim 中的對象移除，然後把 local 的數據給 victim，這樣的話，local 就會被清空，而 victim 就像一個垃圾分揀站，裡面的東西可能會被當做垃圾丟棄了，但是裡面有用的東西也可能被撿回來重新使用。</p>
 <p>victim 中的元素如果被 Get 取走，那麼這個元素就很幸運，因為它又“活”過來了。但是，如果這個時候 Get 的併發不是很大，元素沒有被 Get 取走，那麼就會被移除掉，因為沒有別人引用它的話，就會被垃圾回收掉。</p>
 <p>下面的代碼是垃圾回收時 sync.Pool 的處理邏輯：</p>
-<pre><code>func poolCleanup() {
+<pre><code class="language-go">func poolCleanup() {
     // 丟棄當前victim, STW所以不用加鎖
     for _, p := range oldPools {
         p.victim = nil
@@ -3097,7 +3097,7 @@ func PutBuffer(buf *bytes.Buffer) {
 </ol>
 <h3 id="get-方法"><a class="header" href="#get-方法">Get 方法</a></h3>
 <p>我們來看看 Get 方法的具體實現原理。</p>
-<pre><code>func (p *Pool) Get() interface{} {
+<pre><code class="language-go">func (p *Pool) Get() interface{} {
     // 把當前goroutine固定在當前的P上
     l, pid := p.pin()
     x := l.private // 優先從local的private字段取，快速
@@ -3121,7 +3121,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <p>這裡的重點是 getSlow 方法，我們來分析下。看名字也就知道了，它的耗時可能比較長。它首先要遍歷所有的 local，嘗試從它們的 shared 彈出一個元素。如果還沒找到一個，那麼，就開始對 victim 下手了。</p>
 <p>在 vintim 中查詢可用元素的邏輯還是一樣的，先從對應的 victim 的 private 查找，如果查不到，就再從其它 victim 的 shared 中查找。</p>
 <p>下面的代碼是 getSlow 方法的主要邏輯：</p>
-<pre><code>func (p *Pool) getSlow(pid int) interface{} {
+<pre><code class="language-go">func (p *Pool) getSlow(pid int) interface{} {
 
     size := atomic.LoadUintptr(&amp;p.localSize)
     locals := p.local                       
@@ -3160,7 +3160,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <p>這裡我沒列出 pin 代碼的實現，你只需要知道，pin 方法會將此 goroutine 固定在當前的 P 上，避免查找元素期間被其它的 P 執行。固定的好處就是查找元素期間直接得到跟這個 P 相關的 local。有一點需要注意的是，pin 方法在執行的時候，如果跟這個 P 相關的 local 還沒有創建，或者運行時 P 的數量被修改了的話，就會新創建 local。</p>
 <h3 id="put-方法"><a class="header" href="#put-方法">Put 方法</a></h3>
 <p>我們來看看 Put 方法的具體實現原理。</p>
-<pre><code>func (p *Pool) Put(x interface{}) {
+<pre><code class="language-go">func (p *Pool) Put(x interface{}) {
     if x == nil { // nil值直接丟棄
         return
     }
@@ -3217,7 +3217,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <h2 id="tcp-連接池"><a class="header" href="#tcp-連接池">TCP 連接池</a></h2>
 <p>最常用的一個 TCP 連接池是 fatih 開發的fatih/pool，雖然這個項目已經被 fatih 歸檔（Archived），不再維護了，但是因為它相當穩定了，我們可以開箱即用。即使你有一些特殊的需求，也可以 fork 它，然後自己再做修改。</p>
 <p>它的使用套路如下：</p>
-<pre><code>// 工廠模式，提供創建連接的工廠方法
+<pre><code class="language-go">// 工廠模式，提供創建連接的工廠方法
 factory    := func() (net.Conn, error) { return net.Dial("tcp", "127.0.0.1:4000") }
 
 // 創建一個tcp池，提供初始容量和最大容量以及工廠方法
@@ -3243,7 +3243,7 @@ current := p.Len()
 </code></pre>
 <p>雖然我一直在說 TCP，但是它管理的是更通用的 net.Conn，不侷限於 TCP 連接。</p>
 <p>它通過把 net.Conn 包裝成 PoolConn，實現了攔截 net.Conn 的 Close 方法，避免了真正地關閉底層連接，而是把這個連接放回到池中：</p>
-<pre><code>    type PoolConn struct {
+<pre><code class="language-go">    type PoolConn struct {
     net.Conn
     mu       sync.RWMutex
     c        *channelPool
@@ -3265,7 +3265,7 @@ current := p.Len()
   }
 </code></pre>
 <p>它的 Pool 是通過 Channel 實現的，空閒的連接放入到 Channel 中，這也是 Channel 的一個應用場景：</p>
-<pre><code>    type channelPool struct {
+<pre><code class="language-go">    type channelPool struct {
     // 存儲連接池的channel
     mu    sync.RWMutex
     conns chan net.Conn
@@ -3281,7 +3281,7 @@ current := p.Len()
 <h2 id="memcached-client-連接池"><a class="header" href="#memcached-client-連接池">Memcached Client 連接池</a></h2>
 <p>Brad Fitzpatrick 是知名緩存庫 Memcached 的原作者，前 Go 團隊成員。gomemcache是他使用 Go 開發的 Memchaced 的客戶端，其中也用了連接池的方式池化 Memcached 的連接。接下來讓我們看看它的連接池的實現。</p>
 <p>gomemcache Client 有一個 freeconn 的字段，用來保存空閒的連接。當一個請求使用完之後，它會調用 putFreeConn 放回到池子中，請求的時候，調用 getFreeConn 優先查詢 freeConn 中是否有可用的連接。它採用 Mutex+Slice 實現 Pool：</p>
-<pre><code>   // 放回一個待重用的連接
+<pre><code class="language-go">   // 放回一個待重用的連接
    func (c *Client) putFreeConn(addr net.Addr, cn *conn) {
     c.lk.Lock()
     defer c.lk.Unlock()
@@ -3354,7 +3354,7 @@ Worker Pool最後，我再講一個 Pool 應用得非常廣泛的場景。
 <p>Go 在 1.7 的版本中才正式把 Context 加入到標準庫中。在這之前，很多 Web 框架在定義自己的 handler 時，都會傳遞一個自定義的 Context，把客戶端的信息和客戶端的請求信息放入到 Context 中。Go 最初提供了 golang.org/x/net/context 庫用來提供上下文信息，最終還是在 Go1.7 中把此庫提升到標準庫 context 包中。</p>
 <p>為啥呢？這是因為，在 Go1.7 之前，有很多庫都依賴 golang.org/x/net/context 中的 Context 實現，這就導致 Go 1.7 發佈之後，出現了標準庫 Context 和 golang.org/x/net/context 並存的狀況。新的代碼使用標準庫 Context 的時候，沒有辦法使用這個標準庫的 Context 去調用舊有的使用 x/net/context 實現的方法。</p>
 <p>所以，在 Go1.9 中，還專門實現了一個叫做 type alias 的新特性，然後把 x/net/context 中的 Context 定義成標準庫 Context 的別名，以解決新舊 Context 類型衝突問題，你可以看一下下面這段代碼：</p>
-<pre><code>    // +build go1.9
+<pre><code class="language-go">    // +build go1.9
   package context
   
   import "context"
@@ -3383,7 +3383,7 @@ Worker Pool最後，我再講一個 Pool 應用得非常廣泛的場景。
 <h1 id="context-基本使用方法"><a class="header" href="#context-基本使用方法">Context 基本使用方法</a></h1>
 <p>首先，我們來學習一下 Context 接口包含哪些方法，這些方法都是幹什麼用的。</p>
 <p>包 context 定義了 Context 接口，Context 的具體實現包括 4 個方法，分別是 Deadline、Done、Err 和 Value，如下所示：</p>
-<pre><code>type Context interface {
+<pre><code class="language-go">type Context interface {
     Deadline() (deadline time.Time, ok bool)
     Done() &lt;-chan struct{}
     Err() error
@@ -3401,7 +3401,7 @@ Worker Pool最後，我再講一個 Pool 應用得非常廣泛的場景。
 <li>context.TODO()：返回一個非 nil 的、空的 Context，沒有任何值，不會被 cancel，不會超時，沒有截止日期。當你不清楚是否該用 Context，或者目前還不知道要傳遞一些什麼上下文信息的時候，就可以使用這個方法。</li>
 </ol>
 <p>官方文檔是這麼講的，你可能會覺得像沒說一樣，因為界限並不是很明顯。其實，你根本不用費腦子去考慮，可以直接使用 context.Background。事實上，它們兩個底層的實現是一模一樣的：</p>
-<pre><code>var (
+<pre><code class="language-go">var (
     background = new(emptyCtx)
     todo       = new(emptyCtx)
 )
@@ -3428,14 +3428,14 @@ func TODO() Context {
 <h2 id="withvalue"><a class="header" href="#withvalue">WithValue</a></h2>
 <p>WithValue 基於 parent Context 生成一個新的 Context，保存了一個 key-value 鍵值對。它常常用來傳遞上下文。</p>
 <p>WithValue 方法其實是創建了一個類型為 valueCtx 的 Context，它的類型定義如下：</p>
-<pre><code>type valueCtx struct {
+<pre><code class="language-go">type valueCtx struct {
     Context
     key, val interface{}
 }
 </code></pre>
 <p>它持有一個 key-value 鍵值對，還持有 parent 的 Context。它覆蓋了 Value 方法，優先從自己的存儲中檢查這個 key，不存在的話會從 parent 中繼續檢查。</p>
 <p>Go 標準庫實現的 Context 還實現了鏈式查找。如果不存在，還會向 parent Context 去查找，如果 parent 還是 valueCtx 的話，還是遵循相同的原則：valueCtx 會嵌入 parent，所以還是會查找 parent 的 Value 方法的。</p>
-<pre><code>ctx = context.TODO()
+<pre><code class="language-go">ctx = context.TODO()
 ctx = context.WithValue(ctx, "key1", "0001")
 ctx = context.WithValue(ctx, "key2", "0001")
 ctx = context.WithValue(ctx, "key3", "0001")
@@ -3450,7 +3450,7 @@ fmt.Println(ctx.Value("key1"))
 <p>WithCancel 返回值中的第二個值是一個 cancel 函數。其實，這個返回值的名稱（cancel）和類型（Cancel）也非常迷惑人。</p>
 <p>記住，不是隻有你想中途放棄，才去調用 cancel，只要你的任務正常完成了，就需要調用 cancel，這樣，這個 Context 才能釋放它的資源（通知它的 children 處理 cancel，從它的 parent 中把自己移除，甚至釋放相關的 goroutine）。很多同學在使用這個方法的時候，都會忘記調用 cancel，切記切記，而且一定儘早釋放。</p>
 <p>我們來看下 WithCancel 方法的實現代碼：</p>
-<pre><code>func WithCancel(parent Context) (ctx Context, cancel CancelFunc) {
+<pre><code class="language-go">func WithCancel(parent Context) (ctx Context, cancel CancelFunc) {
     c := newCancelCtx(parent)
     propagateCancel(parent, &amp;c)// 把c朝上傳播
     return &amp;c, func() { c.cancel(true, Canceled) }
@@ -3465,7 +3465,7 @@ func newCancelCtx(parent Context) cancelCtx {
 <p>當這個 cancelCtx 的 cancel 函數被調用的時候，或者 parent 的 Done 被 close 的時候，這個 cancelCtx 的 Done 才會被 close。</p>
 <p>cancel 是向下傳遞的，如果一個 WithCancel 生成的 Context 被 cancel 時，如果它的子 Context（也有可能是孫，或者更低，依賴子的類型）也是 cancelCtx 類型的，就會被 cancel，但是不會向上傳遞。parent Context 不會因為子 Context 被 cancel 而 cancel。</p>
 <p>cancelCtx 被取消時，它的 Err 字段就是下面這個 Canceled 錯誤：</p>
-<pre><code>var Canceled = errors.New("context canceled")WithTimeoutWithTimeout 其實是和 WithDeadline 一樣，只不過一個參數是超時時間，一個參數是截止時間。超時時間加上當前時間，其實就是截止時間，因此，WithTimeout 的實現是：
+<pre><code class="language-go">var Canceled = errors.New("context canceled")WithTimeoutWithTimeout 其實是和 WithDeadline 一樣，只不過一個參數是超時時間，一個參數是截止時間。超時時間加上當前時間，其實就是截止時間，因此，WithTimeout 的實現是：
 
 func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
     // 當前時間+timeout就是deadline
@@ -3481,7 +3481,7 @@ func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
 <li>parent 的 Done 被 close。</li>
 </ol>
 <p>下面的代碼是 WithDeadline 方法的實現：</p>
-<pre><code>func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
+<pre><code class="language-go">func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
     // 如果parent的截止時間更早，直接返回一個cancelCtx即可
     if cur, ok := parent.Deadline(); ok &amp;&amp; cur.Before(d) {
         return WithCancel(parent)
@@ -3508,7 +3508,7 @@ func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
 }
 </code></pre>
 <p>和 cancelCtx 一樣，WithDeadline（WithTimeout）返回的 cancel 一定要調用，並且要儘可能早地被調用，這樣才能儘早釋放資源，不要單純地依賴截止時間被動取消。正確的使用姿勢是啥呢？我們來看一個例子。</p>
-<pre><code>func slowOperationWithTimeout(ctx context.Context) (Result, error) {
+<pre><code class="language-go">func slowOperationWithTimeout(ctx context.Context) (Result, error) {
   ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
   defer cancel() // 一旦慢操作完成就立馬調用cancel
   return slowOperation(ctx)
@@ -3557,7 +3557,7 @@ func main() {
 <p>由於 cache 的存在，單個核上的單個指令進行原子操作的時候，你要確保其它處理器或者核不訪問此原子操作的地址，或者是確保其它處理器或者核總是訪問原子操作之後的最新的值。x86 架構中提供了指令前綴 LOCK，LOCK 保證了指令（比如 LOCK CMPXCHG op1、op2）不會受其它處理器或 CPU 核的影響，有些指令（比如 XCHG）本身就提供 Lock 的機制。不同的 CPU 架構提供的原子操作指令的方式也是不同的，比如對於多核的 MIPS 和 ARM，提供了 LL/SC（Load Link/Store Conditional）指令，可以幫助實現原子操作（ARMLL/SC 指令 LDREX 和 STREX）。</p>
 <p><strong>因為不同的 CPU 架構甚至不同的版本提供的原子操作的指令是不同的，所以，要用一種編程語言實現支持不同架構的原子操作是相當有難度的</strong>。不過，還好這些都不需要你操心，因為 Go 提供了一個通用的原子操作的 API，將更底層的不同的架構下的實現封裝成 atomic 包，提供了修改類型的原子操作（atomic read-modify-write，RMW）和加載存儲類型的原子操作（Load 和 Store）的 API，稍後我會一一介紹。</p>
 <p>有的代碼也會因為架構的不同而不同。有時看起來貌似一個操作是原子操作，但實際上，對於不同的架構來說，情況是不一樣的。比如下面的代碼的第 4 行，是將一個 64 位的值賦值給變量 i：</p>
-<pre><code>const x int64 = 1 + 1&lt;&lt;33
+<pre><code class="language-go">const x int64 = 1 + 1&lt;&lt;33
 
 func main() {
     var i = x
@@ -3593,21 +3593,21 @@ func main() {
 <p>其實，Add 方法就是給第一個參數地址中的值增加一個 delta 值。</p>
 <p>對於有符號的整數來說，delta 可以是一個負數，相當於減去一個值。對於無符號的整數和 uinptr 類型來說，怎麼實現減去一個值呢？畢竟，atomic 並沒有提供單獨的減法操作。</p>
 <p>我來跟你說一種方法。你可以利用計算機補碼的規則，把減法變成加法。以 uint32 類型為例：</p>
-<pre><code>AddUint32(&amp;x, ^uint32(c-1)).
+<pre><code class="language-go">AddUint32(&amp;x, ^uint32(c-1)).
 </code></pre>
 <p>如果是對 uint64 的值進行操作，那麼，就把上面的代碼中的 uint32 替換成 uint64。</p>
 <p>尤其是減 1 這種特殊的操作，我們可以簡化為：</p>
-<pre><code>AddUint32(&amp;x, ^uint32(0))
+<pre><code class="language-go">AddUint32(&amp;x, ^uint32(0))
 </code></pre>
 <p>好了，我們再來看看 CAS 方法。</p>
 <h2 id="cas-compareandswap"><a class="header" href="#cas-compareandswap">CAS （CompareAndSwap）</a></h2>
 <p>以 int32 為例，我們學習一下 CAS 提供的功能。在 CAS 的方法簽名中，需要提供要操作的地址、原數據值、新值，如下所示：</p>
-<pre><code>func CompareAndSwapInt32(addr *int32, old, new int32) (swapped bool)
+<pre><code class="language-go">func CompareAndSwapInt32(addr *int32, old, new int32) (swapped bool)
 </code></pre>
 <p>我們來看下這個方法的功能。</p>
 <p>這個方法會比較當前 addr 地址裡的值是不是 old，如果不等於 old，就返回 false；如果等於 old，就把此地址的值替換成 new 值，返回 true。這就相當於“判斷相等才替換”。</p>
 <p>如果使用偽代碼來表示這個原子操作，代碼如下：</p>
-<pre><code>if *addr == old {
+<pre><code class="language-go">if *addr == old {
   *addr = new
   return true
 }
@@ -3617,7 +3617,7 @@ return false
 <p><img src="./images/de6d354f350b6eb983dcc3f17b87bbb4.png" alt="" /></p>
 <h2 id="swap"><a class="header" href="#swap">Swap</a></h2>
 <p>如果不需要比較舊值，只是比較粗暴地替換的話，就可以使用 Swap 方法，它替換後還可以返回舊值，偽代碼如下：</p>
-<pre><code>old = *addr
+<pre><code class="language-go">old = *addr
 *addr = new
 return old
 </code></pre>
@@ -3638,7 +3638,7 @@ return old
 <p>首先，我們啟動一個 goroutine，然後讓它隨機 sleep 一段時間，之後就變更一下配置，並通過我們前面學到的 Cond 併發原語，通知其它的 reader 去加載新的配置。</p>
 <p>接下來，我們啟動一個 goroutine 等待配置變更的信號，一旦有變更，它就會加載最新的配置。</p>
 <p>通過這個例子，你可以瞭解到 Value 的 Store/Load 方法的使用，因為它只有這兩個方法，只要掌握了它們的使用，你就完全掌握了 Value 類型。</p>
-<pre><code>type Config struct {
+<pre><code class="language-go">type Config struct {
     NodeName string
     Addr     string
     Count    int32
@@ -3684,13 +3684,13 @@ func main() {
 <p>不過有一點讓人覺得不爽的是，或者是讓熟悉面向對象編程的程序員不爽的是，函數調用有一點點麻煩。所以，有些人就對這些函數做了進一步的包裝，跟 atomic 中的 Value 類型類似，這些類型也提供了面向對象的使用方式，比如關注度比較高的uber-go/atomic，它定義和封裝了幾種與常見類型相對應的原子操作類型，這些類型提供了原子操作的方法。這些類型包括 Bool、Duration、Error、Float64、Int32、Int64、String、Uint32、Uint64 等。</p>
 <p>比如 Bool 類型，提供了 CAS、Store、Swap、Toggle 等原子方法，還提供 String、MarshalJSON、UnmarshalJSON 等輔助方法，確實是一個精心設計的 atomic 擴展庫。關於這些方法，你一看名字就能猜出來它們的功能，我就不多說了。</p>
 <p>其它的數據類型也和 Bool 類型相似，使用起來就像面向對象的編程一樣，你可以看下下面的這段代碼。</p>
-<pre><code>    var running atomic.Bool
+<pre><code class="language-go">    var running atomic.Bool
     running.Store(true)
     running.Toggle()
     fmt.Println(running.Load()) // false使用 atomic 實現 Lock-Free queueatomic 常常用來實現 Lock-Free 的數據結構，這次我會給你展示一個 Lock-Free queue 的實現。
 </code></pre>
 <p>Lock-Free queue 最出名的就是 Maged M. Michael 和 Michael L. Scott 1996 年發表的論文中的算法，算法比較簡單，容易實現，偽代碼的每一行都提供了註釋，我就不在這裡貼出偽代碼了，因為我們使用 Go 實現這個數據結構的代碼幾乎和偽代碼一樣：</p>
-<pre><code>package queue
+<pre><code class="language-go">package queue
 import (
   "sync/atomic"
   "unsafe"
@@ -3814,40 +3814,40 @@ func cas(p *unsafe.Pointer, old, new *node) (ok bool) {
 <p>下面，我們來具體學習下 Channel 的基本用法。</p>
 <h1 id="channel-基本用法"><a class="header" href="#channel-基本用法">Channel 基本用法</a></h1>
 <p>你可以往 Channel 中發送數據，也可以從 Channel 中接收數據，所以，Channel 類型（為了說起來方便，我們下面都把 Channel 叫做 chan）分為<strong>只能接收</strong>、<strong>只能發送</strong>、<strong>既可以接收又可以發送</strong>三種類型。下面是它的語法定義：</p>
-<pre><code>ChannelType = ( "chan" | "chan" "&lt;-" | "&lt;-" "chan" ) ElementType .
+<pre><code class="language-go">ChannelType = ( "chan" | "chan" "&lt;-" | "&lt;-" "chan" ) ElementType .
 </code></pre>
 <p>相應地，Channel 的正確語法如下：</p>
-<pre><code>chan string          // 可以發送接收string
+<pre><code class="language-go">chan string          // 可以發送接收string
 chan&lt;- struct{}      // 只能發送struct{}
 &lt;-chan int           // 只能從chan接收int
 </code></pre>
 <p>我們把既能接收又能發送的 chan 叫做雙向的 chan，把只能發送和只能接收的 chan 叫做單向的 chan。其中，“&lt;-”表示單向的 chan，如果你記不住，我告訴你一個簡便的方法：<strong>這個箭頭總是射向左邊的，元素類型總在最右邊。如果箭頭指向 chan，就表示可以往 chan 中塞數據；如果箭頭遠離 chan，就表示 chan 會往外吐數據</strong>。</p>
 <p>chan 中的元素是任意的類型，所以也可能是 chan 類型，我來舉個例子，比如下面的 chan 類型也是合法的：</p>
-<pre><code>chan&lt;- chan int   
+<pre><code class="language-go">chan&lt;- chan int   
 chan&lt;- &lt;-chan int  
 &lt;-chan &lt;-chan int
 chan (&lt;-chan int)
 </code></pre>
 <p>可是，怎麼判定箭頭符號屬於哪個 chan 呢？其實，“&lt;-”有個規則，總是儘量和左邊的 chan 結合（The <code>&lt;-</code> operator associates with the leftmost <code>chan</code> possible:），因此，上面的定義和下面的使用括號的劃分是一樣的：</p>
-<pre><code>chan&lt;- （chan int） // &lt;- 和第一個chan結合
+<pre><code class="language-go">chan&lt;- （chan int） // &lt;- 和第一個chan結合
 chan&lt;- （&lt;-chan int） // 第一個&lt;-和最左邊的chan結合，第二個&lt;-和左邊第二個chan結合
 &lt;-chan （&lt;-chan int） // 第一個&lt;-和最左邊的chan結合，第二個&lt;-和左邊第二個chan結合 
 chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan結合
 </code></pre>
 <p>通過 make，我們可以初始化一個 chan，未初始化的 chan 的零值是 nil。你可以設置它的容量，比如下面的 chan 的容量是 9527，我們把這樣的 chan 叫做 buffered chan；如果沒有設置，它的容量是 0，我們把這樣的 chan 叫做 unbuffered chan。</p>
-<pre><code>make(chan int, 9527)
+<pre><code class="language-go">make(chan int, 9527)
 </code></pre>
 <p>如果 chan 中還有數據，那麼，從這個 chan 接收數據的時候就不會阻塞，如果 chan 還未滿（“滿”指達到其容量），給它發送數據也不會阻塞，否則就會阻塞。unbuffered chan 只有讀寫都準備好之後才不會阻塞，這也是很多使用 unbuffered chan 時的常見 Bug。</p>
 <p>還有一個知識點需要你記住：nil 是 chan 的零值，是一種特殊的 chan，對值是 nil 的 chan 的發送接收調用者總是會阻塞。</p>
 <p>下面，我來具體給你介紹幾種基本操作，分別是發送數據、接收數據，以及一些其它操作。學會了這幾種操作，你就能真正地掌握 Channel 的用法了。</p>
 <p><strong>1. 發送數據</strong></p>
 <p>往 chan 中發送一個數據使用“ch&lt;-”，發送數據是一條語句:</p>
-<pre><code>ch &lt;- 2000
+<pre><code class="language-go">ch &lt;- 2000
 </code></pre>
 <p>這裡的 ch 是 chan int 類型或者是 chan &lt;-int。</p>
 <p><strong>2. 接收數據</strong></p>
 <p>從 chan 中接收一條數據使用“&lt;-ch”，接收數據也是一條語句：</p>
-<pre><code>  x := &lt;-ch // 把接收的一條數據賦值給變量x
+<pre><code class="language-go">  x := &lt;-ch // 把接收的一條數據賦值給變量x
   foo(&lt;-ch) // 把接收的一個的數據作為參數傳給函數
   &lt;-ch // 丟棄接收的一條數據
 </code></pre>
@@ -3856,7 +3856,7 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 <p><strong>3. 其它操作</strong></p>
 <p>Go 內建的函數 close、cap、len 都可以操作 chan 類型：close 會把 chan 關閉掉，cap 返回 chan 的容量，len 返回 chan 中緩存的還未被取走的元素數量。</p>
 <p>send 和 recv 都可以作為 select 語句的 case clause，如下面的例子：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var ch = make(chan int, 10)
     for i := 0; i &lt; 10; i++ {
         select {
@@ -3868,12 +3868,12 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 }
 </code></pre>
 <p>chan 還可以應用於 for-range 語句中，比如：</p>
-<pre><code>    for v := range ch {
+<pre><code class="language-go">    for v := range ch {
         fmt.Println(v)
     }
 </code></pre>
 <p>或者是忽略讀取的值，只是清空 chan：</p>
-<pre><code>    for range ch {
+<pre><code class="language-go">    for range ch {
     }
 </code></pre>
 <p>好了，到這裡，Channel 的基本用法，我們就學完了。下面我從代碼實現的角度分析 chan 類型的實現。畢竟，只有掌握了原理，你才能真正地用好它。</p>
@@ -3899,7 +3899,7 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 <p><img src="./images/e347727c9fd4fd119435a29aa84f4f73.png" alt="" /></p>
 <p><strong>我們只關注 makechan 就好了，因為 makechan64 只是做了 size 檢查，底層還是調用 makechan 實現的</strong>。makechan 的目標就是生成 hchan 對象。</p>
 <p>那麼，接下來，就讓我們來看一下 makechan 的主要邏輯。主要的邏輯我都加上了註釋，它會根據 chan 的容量的大小和元素的類型不同，初始化不同的存儲空間：</p>
-<pre><code>func makechan(t *chantype, size int) *hchan {
+<pre><code class="language-go">func makechan(t *chantype, size int) *hchan {
     elem := t.elem
   
         // 略去檢查代碼
@@ -3935,7 +3935,7 @@ chan (&lt;-chan int) // 因為括號的原因，&lt;-和括號內第一個chan�
 <p>最終，針對不同的容量和元素類型，這段代碼分配了不同的對象來初始化 hchan 對象的字段，返回 hchan 對象。</p>
 <h2 id="send"><a class="header" href="#send">send</a></h2>
 <p>Go 在編譯發送數據給 chan 的時候，會把 send 語句轉換成 chansend1 函數，chansend1 函數會調用 chansend，我們分段學習它的邏輯：</p>
-<pre><code>func chansend1(c *hchan, elem unsafe.Pointer) {
+<pre><code class="language-go">func chansend1(c *hchan, elem unsafe.Pointer) {
     chansend(c, elem, true, getcallerpc())
 }
 func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
@@ -3951,13 +3951,13 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
   }
 </code></pre>
 <p>最開始，第一部分是進行判斷：如果 chan 是 nil 的話，就把調用者 goroutine park（阻塞休眠）， 調用者就永遠被阻塞住了，所以，第 11 行是不可能執行到的代碼。</p>
-<pre><code>  // 第二部分，如果chan沒有被close,並且chan滿了，直接返回
+<pre><code class="language-go">  // 第二部分，如果chan沒有被close,並且chan滿了，直接返回
     if !block &amp;&amp; c.closed == 0 &amp;&amp; full(c) {
       return false
   }
 </code></pre>
 <p>第二部分的邏輯是當你往一個已經滿了的 chan 實例發送數據時，並且想不阻塞當前調用，那麼這裡的邏輯是直接返回。chansend1 方法在調用 chansend 的時候設置了阻塞參數，所以不會執行到第二部分的分支裡。</p>
-<pre><code>  // 第三部分，chan已經被close的情景
+<pre><code class="language-go">  // 第三部分，chan已經被close的情景
     lock(&amp;c.lock) // 開始加鎖
     if c.closed != 0 {
       unlock(&amp;c.lock)
@@ -3965,7 +3965,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
   }
 </code></pre>
 <p>第三部分顯示的是，如果 chan 已經被 close 了，再往裡面發送數據的話會 panic。</p>
-<pre><code>      // 第四部分，從接收隊列中出隊一個等待的receiver
+<pre><code class="language-go">      // 第四部分，從接收隊列中出隊一個等待的receiver
         if sg := c.recvq.dequeue(); sg != nil {
       // 
       send(c, sg, ep, func() { unlock(&amp;c.lock) }, 3)
@@ -3973,7 +3973,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
     }
 </code></pre>
 <p>第四部分，如果等待隊列中有等待的 receiver，那麼這段代碼就把它從隊列中彈出，然後直接把數據交給它（通過 memmove(dst, src, t.size)），而不需要放入到 buf 中，速度可以更快一些。</p>
-<pre><code>    // 第五部分，buf還沒滿
+<pre><code class="language-go">    // 第五部分，buf還沒滿
       if c.qcount &lt; c.dataqsiz {
       qp := chanbuf(c, c.sendx)
       if raceenabled {
@@ -3991,7 +3991,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
     }
 </code></pre>
 <p>第五部分說明當前沒有 receiver，需要把數據放入到 buf 中，放入之後，就成功返回了。</p>
-<pre><code>      // 第六部分，buf滿。
+<pre><code class="language-go">      // 第六部分，buf滿。
         // chansend1不會進入if塊裡，因為chansend1的block=true
         if !block {
       unlock(&amp;c.lock)
@@ -4002,7 +4002,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <p>第六部分是處理 buf 滿的情況。如果 buf 滿了，發送者的 goroutine 就會加入到發送者的等待隊列中，直到被喚醒。這個時候，數據或者被取走了，或者 chan 被 close 了。</p>
 <h2 id="recv"><a class="header" href="#recv">recv</a></h2>
 <p>在處理從 chan 中接收數據時，Go 會把代碼轉換成 chanrecv1 函數，如果要返回兩個返回值，會轉換成 chanrecv2，chanrecv1 函數和 chanrecv2 會調用 chanrecv。我們分段學習它的邏輯：</p>
-<pre><code>    func chanrecv1(c *hchan, elem unsafe.Pointer) {
+<pre><code class="language-go">    func chanrecv1(c *hchan, elem unsafe.Pointer) {
     chanrecv(c, elem, true)
   }
   func chanrecv2(c *hchan, elem unsafe.Pointer) (received bool) {
@@ -4022,13 +4022,13 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 </code></pre>
 <p>chanrecv1 和 chanrecv2 傳入的 block 參數的值是 true，都是阻塞方式，所以我們分析 chanrecv 的實現的時候，不考慮 block=false 的情況。</p>
 <p>第一部分是 chan 為 nil 的情況。和 send 一樣，從 nil chan 中接收（讀取、獲取）數據時，調用者會被永遠阻塞。</p>
-<pre><code>  // 第二部分, block=false且c為空
+<pre><code class="language-go">  // 第二部分, block=false且c為空
     if !block &amp;&amp; empty(c) {
       ......
     }
 </code></pre>
 <p>第二部分你可以直接忽略，因為不是我們這次要分析的場景。</p>
-<pre><code>        // 加鎖，返回時釋放鎖
+<pre><code class="language-go">        // 加鎖，返回時釋放鎖
       lock(&amp;c.lock)
       // 第三部分，c已經被close,且chan為空empty
     if c.closed != 0 &amp;&amp; c.qcount == 0 {
@@ -4040,14 +4040,14 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
     }
 </code></pre>
 <p>第三部分是 chan 已經被 close 的情況。如果 chan 已經被 close 了，並且隊列中沒有緩存的元素，那麼返回 true、false。</p>
-<pre><code>      // 第四部分，如果sendq隊列中有等待發送的sender
+<pre><code class="language-go">      // 第四部分，如果sendq隊列中有等待發送的sender
         if sg := c.sendq.dequeue(); sg != nil {
       recv(c, sg, ep, func() { unlock(&amp;c.lock) }, 3)
       return true, true
     }
 </code></pre>
 <p>第四部分是處理 sendq 隊列中有等待者的情況。這個時候，如果 buf 中有數據，優先從 buf 中讀取數據，否則直接從等待隊列中彈出一個 sender，把它的數據複製給這個 receiver。</p>
-<pre><code>      // 第五部分, 沒有等待的sender, buf中有數據
+<pre><code class="language-go">      // 第五部分, 沒有等待的sender, buf中有數據
     if c.qcount &gt; 0 {
       qp := chanbuf(c, c.recvx)
       if ep != nil {
@@ -4077,7 +4077,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <p>通過 close 函數，可以把 chan 關閉，編譯器會替換成 closechan 方法的調用。</p>
 <p>下面的代碼是 close chan 的主要邏輯。如果 chan 為 nil，close 會 panic；如果 chan 已經 closed，再次 close 也會 panic。否則的話，如果 chan 不為 nil，chan 也沒有 closed，就把等待隊列中的 sender（writer）和 receiver（reader）從隊列中全部移除並喚醒。</p>
 <p>下面的代碼就是 close chan 的邏輯:</p>
-<pre><code>    func closechan(c *hchan) {
+<pre><code class="language-go">    func closechan(c *hchan) {
     if c == nil { // chan為nil, panic
       panic(plainError("close of nil channel"))
     }
@@ -4129,7 +4129,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <li>close 已經 close 的 chan。</li>
 </ol>
 <p>goroutine 洩漏的問題也很常見，下面的代碼也是一個實際項目中的例子：</p>
-<pre><code>func process(timeout time.Duration) bool {
+<pre><code class="language-go">func process(timeout time.Duration) bool {
     ch := make(chan bool)
 
     go func() {
@@ -4190,7 +4190,7 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <p>在開始上課之前，我先補充一個知識點：通過反射的方式執行 select 語句，在處理很多的 case clause，尤其是不定長的 case clause 的時候，非常有用。而且，在後面介紹任務編排的實現時，我也會採用這種方法，所以，我先帶你具體學習下 Channel 的反射用法。</p>
 <h1 id="使用反射操作-channel"><a class="header" href="#使用反射操作-channel">使用反射操作 Channel</a></h1>
 <p>select 語句可以處理 chan 的 send 和 recv，send 和 recv 都可以作為 case clause。如果我們同時處理兩個 chan，就可以寫成下面的樣子：</p>
-<pre><code>    select {
+<pre><code class="language-go">    select {
     case v := &lt;-ch1:
         fmt.Println(v)
     case v := &lt;-ch2:
@@ -4201,12 +4201,12 @@ func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
 <p>或者是，chan 的數量在編譯的時候是不定的，在運行的時候需要處理一個 slice of chan，這個時候，也沒有辦法在編譯前寫成字面意義的 select。那該怎麼辦？</p>
 <p>這個時候，就要“祭”出我們的反射大法了。</p>
 <p>通過 reflect.Select 函數，你可以將一組運行時的 case clause 傳入，當作參數執行。Go 的 select 是偽隨機的，它可以在執行的 case 中隨機選擇一個 case，並把選擇的這個 case 的索引（chosen）返回，如果沒有可用的 case 返回，會返回一個 bool 類型的返回值，這個返回值用來表示是否有 case 成功被選擇。如果是 recv case，還會返回接收的元素。Select 的方法簽名如下：</p>
-<pre><code>func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool)
+<pre><code class="language-go">func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool)
 </code></pre>
 <p>下面，我來藉助一個例子，來演示一下，動態處理兩個 chan 的情形。因為這樣的方式可以動態處理 case 數據，所以，你可以傳入幾百幾千幾萬的 chan，這就解決了不能動態處理 n 個 chan 的問題。</p>
 <p>首先，createCases 函數分別為每個 chan 生成了 recv case 和 send case，並返回一個 reflect.SelectCase 數組。</p>
 <p>然後，通過一個循環 10 次的 for 循環執行 reflect.Select，這個方法會從 cases 中選擇一個 case 執行。第一次肯定是 send case，因為此時 chan 還沒有元素，recv 還不可用。等 chan 中有了數據以後，recv case 就可以被選擇了。這樣，你就可以處理不定數量的 chan 了。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var ch1 = make(chan int, 10)
     var ch2 = make(chan int, 10)
 
@@ -4264,7 +4264,7 @@ func createCases(chs ...chan int) []reflect.SelectCase {
 <p>有 4 個 goroutine，編號為 1、2、3、4。每秒鐘會有一個 goroutine 打印出它自己的編號，要求你編寫程序，讓輸出的編號總是按照 1、2、3、4、1、2、3、4……這個順序打印出來。</p>
 </blockquote>
 <p>為了實現順序的數據傳遞，我們可以定義一個令牌的變量，誰得到令牌，誰就可以打印一次自己的編號，同時將令牌<strong>傳遞</strong>給下一個 goroutine，我們嘗試使用 chan 來實現，可以看下下面的代碼。</p>
-<pre><code>type Token struct{}
+<pre><code class="language-go">type Token struct{}
 
 func newWorker(id int, ch chan Token, nextCh chan Token) {
     for {
@@ -4298,7 +4298,7 @@ func main() {
 <p>傳統的併發原語 Cond 也能實現這個功能，但是，Cond 使用起來比較複雜，容易出錯，而使用 chan 實現 wait/notify 模式就方便很多了。</p>
 <p>除了正常的業務處理時的 wait/notify，我們經常碰到的一個場景，就是程序關閉的時候，我們需要在退出之前做一些清理（doCleanup 方法）的動作。這個時候，我們經常要使用 chan。</p>
 <p>比如，使用 chan 實現程序的 graceful shutdown，在退出之前執行一些連接關閉、文件 close、緩存落盤等一些動作。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
   go func() {
       ...... // 執行業務處理
     }()
@@ -4320,7 +4320,7 @@ func main() {
 <li>closed，代表清理工作已經做完。</li>
 </ol>
 <p>所以，上面的例子可以改寫如下：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var closing = make(chan struct{})
     var closed = make(chan struct{})
 
@@ -4362,7 +4362,7 @@ func doCleanup(closed chan struct{}) {
 <p>在 chan 的內部實現中，就有一把互斥鎖保護著它的所有字段。從外在表現上，chan 的發送和接收之間也存在著 happens-before 的關係，保證元素放進去之後，receiver 才能讀取到（關於 happends-before 的關係，是指事件發生的先後順序關係，我會在下一講詳細介紹，這裡你只需要知道它是一種描述事件先後順序的方法）。</p>
 <p>要想使用 chan 實現互斥鎖，至少有兩種方式。一種方式是先初始化一個 capacity 等於 1 的 Channel，然後再放入一個元素。這個元素就代表鎖，誰取得了這個元素，就相當於獲取了這把鎖。另一種方式是，先初始化一個 capacity 等於 1 的 Channel，它的“空槽”代表鎖，誰能成功地把元素髮送到這個 Channel，誰就獲取了這把鎖。</p>
 <p>這是使用 Channel 實現鎖的兩種不同實現方式，我重點介紹下第一種。理解了這種實現方式，第二種方式也就很容易掌握了，我就不多說了。</p>
-<pre><code>// 使用chan實現互斥鎖
+<pre><code class="language-go">// 使用chan實現互斥鎖
 type Mutex struct {
     ch chan struct{}
 }
@@ -4434,7 +4434,7 @@ func main() {
 <p>我們會使用“信號通知”實現某個任務執行完成後的通知機制，在實現時，我們為這個任務定義一個類型為 chan struct{}類型的 done 變量，等任務結束後，我們就可以 close 這個變量，然後，其它 receiver 就會收到這個通知。</p>
 <p>這是有一個任務的情況，如果有多個任務，只要有任意一個任務執行完，我們就想獲得這個信號，這就是 Or-Done 模式。</p>
 <p>比如，你發送同一個請求到多個微服務節點，只要任意一個微服務節點返回結果，就算成功，這個時候，就可以參考下面的實現：</p>
-<pre><code>func or(channels ...&lt;-chan interface{}) &lt;-chan interface{} {
+<pre><code class="language-go">func or(channels ...&lt;-chan interface{}) &lt;-chan interface{} {
     // 特殊情況，只有零個或者1個chan
     switch len(channels) {
     case 0:
@@ -4466,7 +4466,7 @@ func main() {
 }
 </code></pre>
 <p>我們可以寫一個測試程序測試它：</p>
-<pre><code>func sig(after time.Duration) &lt;-chan interface{} {
+<pre><code class="language-go">func sig(after time.Duration) &lt;-chan interface{} {
     c := make(chan interface{})
     go func() {
         defer close(c)
@@ -4492,7 +4492,7 @@ func main() {
 </code></pre>
 <p>這裡的實現使用了一個巧妙的方式，<strong>當 chan 的數量大於 2 時，使用遞歸的方式等待信號</strong>。</p>
 <p>在 chan 數量比較多的情況下，遞歸併不是一個很好的解決方式，根據這一講最開始介紹的反射的方法，我們也可以實現 Or-Done 模式：</p>
-<pre><code>func or(channels ...&lt;-chan interface{}) &lt;-chan interface{} {
+<pre><code class="language-go">func or(channels ...&lt;-chan interface{}) &lt;-chan interface{} {
     //特殊情況，只有0個或者1個
     switch len(channels) {
     case 0:
@@ -4528,7 +4528,7 @@ func main() {
 <p>扇入模式也可以使用反射、遞歸，或者是用最笨的每個 goroutine 處理一個 Channel 的方式來實現。</p>
 <p>這裡我列舉下遞歸和反射的方式，幫你加深一下對這個技巧的理解。</p>
 <p>反射的代碼比較簡短，易於理解，主要就是構造出 SelectCase slice，然後傳遞給 reflect.Select 語句。</p>
-<pre><code>func fanInReflect(chans ...&lt;-chan interface{}) &lt;-chan interface{} {
+<pre><code class="language-go">func fanInReflect(chans ...&lt;-chan interface{}) &lt;-chan interface{} {
     out := make(chan interface{})
     go func() {
         defer close(out)
@@ -4555,7 +4555,7 @@ func main() {
 }
 </code></pre>
 <p>遞歸模式也是在 Channel 大於 2 時，採用二分法遞歸 merge。</p>
-<pre><code>func fanInRec(chans ...&lt;-chan interface{}) &lt;-chan interface{} {
+<pre><code class="language-go">func fanInRec(chans ...&lt;-chan interface{}) &lt;-chan interface{} {
     switch len(chans) {
     case 0:
         c := make(chan interface{})
@@ -4574,7 +4574,7 @@ func main() {
 }
 </code></pre>
 <p>這裡有一個 mergeTwo 的方法，是將兩個 Channel 合併成一個 Channel，是扇入形式的一種特例（只處理兩個 Channel）。 下面我來藉助一段代碼幫你理解下這個方法。</p>
-<pre><code>func mergeTwo(a, b &lt;-chan interface{}) &lt;-chan interface{} {
+<pre><code class="language-go">func mergeTwo(a, b &lt;-chan interface{}) &lt;-chan interface{} {
     c := make(chan interface{})
     go func() {
         defer close(c)
@@ -4600,7 +4600,7 @@ func main() {
 </code></pre>
 <p>扇出模式只有一個輸入源 Channel，有多個目標 Channel，扇出比就是 1 比目標 Channel 數的值，經常用在設計模式中的觀察者模式中（觀察者設計模式定義了對象間的一種一對多的組合關係。這樣一來，一個對象的狀態發生變化時，所有依賴於它的對象都會得到通知並自動刷新）。在觀察者模式中，數據變動後，多個觀察者都會收到這個變更信號。</p>
 <p>下面是一個扇出模式的實現。從源 Channel 取出一個數據後，依次發送給目標 Channel。在發送給目標 Channel 的時候，可以同步發送，也可以異步發送：</p>
-<pre><code>func fanOut(ch &lt;-chan interface{}, out []chan interface{}, async bool) {
+<pre><code class="language-go">func fanOut(ch &lt;-chan interface{}, out []chan interface{}, async bool) {
     go func() {
         defer func() { //退出時關閉所有的輸出chan
             for i := 0; i &lt; len(out); i++ {
@@ -4628,7 +4628,7 @@ func main() {
 <h3 id="stream"><a class="header" href="#stream">Stream</a></h3>
 <p>這裡我來介紹一種把 Channel 當作流式管道使用的方式，也就是把 Channel 看作流（Stream），提供跳過幾個元素，或者是隻取其中的幾個元素等方法。</p>
 <p>首先，我們提供創建流的方法。這個方法把一個數據 slice 轉換成流：</p>
-<pre><code>func asStream(done &lt;-chan struct{}, values ...interface{}) &lt;-chan interface{} {
+<pre><code class="language-go">func asStream(done &lt;-chan struct{}, values ...interface{}) &lt;-chan interface{} {
     s := make(chan interface{}) //創建一個unbuffered的channel
     go func() { // 啟動一個goroutine，往s中塞數據
         defer close(s) // 退出時關閉chan
@@ -4653,7 +4653,7 @@ func main() {
 <li>skipWhile：跳過前面滿足條件的數據，一旦不滿足條件，當前這個元素和以後的元素都會輸出給 Channel 的 receiver。</li>
 </ol>
 <p>這些方法的實現很類似，我們以 takeN 為例來具體解釋一下。</p>
-<pre><code>func takeN(done &lt;-chan struct{}, valueStream &lt;-chan interface{}, num int) &lt;-chan interface{} {
+<pre><code class="language-go">func takeN(done &lt;-chan struct{}, valueStream &lt;-chan interface{}, num int) &lt;-chan interface{} {
     takeStream := make(chan interface{}) // 創建輸出流
     go func() {
         defer close(takeStream)
@@ -4672,7 +4672,7 @@ func main() {
 <p>map-reduce 分為兩個步驟，第一步是映射（map），處理隊列中的數據，第二步是規約（reduce），把列表中的每一個元素按照一定的處理方式處理成結果，放入到結果隊列中。</p>
 <p>就像做漢堡一樣，map 就是單獨處理每一種食材，reduce 就是從每一份食材中取一部分，做成一個漢堡。</p>
 <p>我們先來看下 map 函數的處理邏輯:</p>
-<pre><code>func mapChan(in &lt;-chan interface{}, fn func(interface{}) interface{}) &lt;-chan interface{} {
+<pre><code class="language-go">func mapChan(in &lt;-chan interface{}, fn func(interface{}) interface{}) &lt;-chan interface{} {
     out := make(chan interface{}) //創建一個輸出chan
     if in == nil { // 異常檢查
         close(out)
@@ -4690,7 +4690,7 @@ func main() {
 }
 </code></pre>
 <p>reduce 函數的處理邏輯如下：</p>
-<pre><code>func reduce(in &lt;-chan interface{}, fn func(r, v interface{}) interface{}) interface{} {
+<pre><code class="language-go">func reduce(in &lt;-chan interface{}, fn func(r, v interface{}) interface{}) interface{} {
     if in == nil { // 異常檢查
         return nil
     }
@@ -4704,7 +4704,7 @@ func main() {
 }
 </code></pre>
 <p>我們可以寫一個程序，這個程序使用 map-reduce 模式處理一組整數，map 函數就是為每個整數乘以 10，reduce 函數就是把 map 處理的結果累加起來：</p>
-<pre><code>// 生成一個數據流
+<pre><code class="language-go">// 生成一個數據流
 func asStream(done &lt;-chan struct{}) &lt;-chan interface{} {
     s := make(chan interface{})
     values := []int{1, 2, 3, 4, 5}
@@ -4760,7 +4760,7 @@ func main() {
 <p>舉個例子，當兩個 goroutine 同時對一個數據進行讀寫時，假設 goroutine g1 對這個變量進行寫操作 w，goroutine g2 同時對這個變量進行讀操作 r，那麼，如果 g2 在執行讀操作 r 的時候，已經看到了 g1 寫操作 w 的結果，那麼，也不意味著 g2 能看到在 w 之前的其它的寫操作。這是一個反直觀的結果，不過的確可能會存在。</p>
 <p>接下來，我再舉幾個具體的例子，帶你來感受一下，重排以及多核 CPU 併發執行導致程序的運行和代碼的書寫順序不一樣的情況。</p>
 <p>先看第一個例子，代碼如下：</p>
-<pre><code>var a, b int
+<pre><code class="language-go">var a, b int
 
 func f() {
   a = 1 // w之前的寫操作
@@ -4779,7 +4779,7 @@ func main() {
 </code></pre>
 <p>可以看到，第 9 行是要打印 b 的值。需要注意的是，即使這裡打印出的值是 2，但是依然可能在打印 a 的值時，打印出初始值 0，而不是 1。這是因為，程序運行的時候，不能保證 g2 看到的 a 和 b 的賦值有先後關係。</p>
 <p>再來看一個類似的例子。</p>
-<pre><code>var a string
+<pre><code class="language-go">var a string
 var done bool
 
 func setup() {
@@ -4796,7 +4796,7 @@ func main() {
 </code></pre>
 <p>在這段代碼中，主 goroutine main 即使觀察到 done 變成 true 了，最後讀取到的 a 的值仍然可能為空。</p>
 <p>更糟糕的情況是，main 根本就觀察不到另一個 goroutine 對 done 的寫操作，這就會導致 main 程序一直被 hang 住。甚至可能還會出現<strong>半初始化</strong>的情況，比如：</p>
-<pre><code>type T struct {
+<pre><code class="language-go">type T struct {
   msg string
 }
 
@@ -4822,7 +4822,7 @@ func main() {
 <p>在一個 goroutine 內部，程序的執行順序和它們的代碼指定的順序是一樣的，即使編譯器或者 CPU 重排了讀寫順序，從行為上來看，也和代碼指定的順序一樣。</p>
 <p>這是一個非常重要的保證，我們一定要記住。</p>
 <p>我們來看一個例子。在下面的代碼中，即使編譯器或者 CPU 對 a、b、c 的初始化進行了重排，但是打印結果依然能保證是 1、2、3，而不會出現 1、0、0 或 1、0、1 等情況。</p>
-<pre><code>func foo() {
+<pre><code class="language-go">func foo() {
     var a = 1
     var b = 2
     var c = 3
@@ -4861,7 +4861,7 @@ func main() {
 <p>應用程序的初始化是在單一的 goroutine 執行的。如果包 p 導入了包 q，那麼，q 的 init 函數的執行一定 happens before p 的任何初始化代碼。</p>
 <p>這裡有一個特殊情況需要你記住：<strong>main 函數一定在導入的包的 init 函數之後執行</strong>。</p>
 <p>包級別的變量在同一個文件中是按照聲明順序逐個初始化的，除非初始化它的時候依賴其它的變量。同一個包下的多個文件，會按照文件名的排列順序進行初始化。這個順序被定義在Go 語言規範中，而不是 Go 的內存模型規範中。你可以看看下面的例子中各個變量的值：</p>
-<pre><code>var (
+<pre><code class="language-go">var (
   a = c + b  // == 9
   b = f()    // == 4
   c = f()    // == 5
@@ -4879,14 +4879,14 @@ func f() int {
 <p>這個例子是一個 <strong>main</strong> 程序，它依賴包 p1，包 p1 依賴包 p2，包 p2 依賴 p3。</p>
 <p><img src="./images/d9b82a017b88d00ffbe2e644b03d3e97.png" alt="" /></p>
 <p>為了追蹤初始化過程，並輸出有意義的日誌，我定義了一個輔助方法，打印出日誌並返回一個用來初始化的整數值：</p>
-<pre><code>func Trace(t string, v int) int {
+<pre><code class="language-go">func Trace(t string, v int) int {
     fmt.Println(t, ":", v)
     return v
 }
 </code></pre>
 <p>包 <strong>p3</strong> 包含兩個文件，分別定義了一個 init 函數。第一個文件中定義了兩個變量，這兩個變量的值還會在 init 函數中進行修改。</p>
 <p>我們來分別看下包 p3 的這兩個文件：</p>
-<pre><code>// lib1.go in p3
+<pre><code class="language-go">// lib1.go in p3
 
 var V1_p3 = trace.Trace("init v1_p3", 3)
 var V2_p3 = trace.Trace("init v2_p3", 3)
@@ -4904,7 +4904,7 @@ func init() {
 }
 </code></pre>
 <p>下面再來看看包 p2。包 p2 定義了變量和 init 函數。第一個變量初始化為 2，並在 init 函數中更改為 200。第二個變量是複製的 p3.V2_p3。</p>
-<pre><code>var V1_p2 = trace.Trace("init v1_p2", 2)
+<pre><code class="language-go">var V1_p2 = trace.Trace("init v1_p2", 2)
 var V2_p2 = trace.Trace("init v2_p2", p3.V2_p3)
 
 func init() {
@@ -4913,7 +4913,7 @@ func init() {
 }
 </code></pre>
 <p>包 <strong>p1</strong> 定義了變量和 init 函數。它的兩個變量的值是複製的 p2 對應的兩個變量值。</p>
-<pre><code>var V1_p1 = trace.Trace("init v1_p1", p2.V1_p2)
+<pre><code class="language-go">var V1_p1 = trace.Trace("init v1_p1", p2.V1_p2)
 var V2_p1 = trace.Trace("init v2_p1", p2.V2_p2)
 
 func init() {
@@ -4921,7 +4921,7 @@ func init() {
 }
 </code></pre>
 <p><strong>main</strong> 定義了 init 函數和 main 函數。</p>
-<pre><code>func init() {
+<pre><code class="language-go">func init() {
     fmt.Println("init func in main")
 }
 
@@ -4931,7 +4931,7 @@ func main() {
 }
 </code></pre>
 <p>運行 main 函數會依次輸出 p3、p2、p1、main 的初始化變量時的日誌（變量初始化時的日誌和 init 函數調用時的日誌）：</p>
-<pre><code>// 包p3的變量初始化
+<pre><code class="language-go">// 包p3的變量初始化
 init v1_p3 : 3
 init v2_p3 : 3
 // p3的init函數
@@ -4962,7 +4962,7 @@ V2_p1: 300
 <p>首先，我們需要明確一個規則：<strong>啟動 goroutine 的 go 語句的執行，一定 happens before 此 goroutine 內的代碼執行。</strong></p>
 <p>根據這個規則，我們就可以知道，如果 go 語句傳入的參數是一個函數執行的結果，那麼，這個函數一定先於 goroutine 內部的代碼被執行。</p>
 <p>我們來看一個例子。在下面的代碼中，第 8 行 a 的賦值和第 9 行的 go 語句是在同一個 goroutine 中執行的，所以，在主 goroutine 看來，第 8 行肯定 happens before 第 9 行，又由於剛才的保證，第 9 行子 goroutine 的啟動 happens before 第 4 行的變量輸出，那麼，我們就可以推斷出，第 8 行 happens before 第 4 行。也就是說，在第 4 行打印 a 的值的時候，肯定會打印出“hello world”。</p>
-<pre><code>var a string
+<pre><code class="language-go">var a string
 
 func f() {
   print(a)
@@ -4978,7 +4978,7 @@ func hello() {
 <p>Channel 是 goroutine 同步交流的主要方法。往一個 Channel 中發送一條數據，通常對應著另一個 goroutine 從這個 Channel 中接收一條數據。</p>
 <p>通用的 Channel happens-before 關係保證有 4 條規則，我分別來介紹下。</p>
 <p><strong>第 1 條規則是</strong>，往 Channel 中的發送操作，happens before 從該 Channel 接收相應數據的動作完成之前，即第 n 個 send 一定 happens before 第 n 個 receive 的完成。</p>
-<pre><code>var ch = make(chan struct{}, 10) // buffered或者unbuffered
+<pre><code class="language-go">var ch = make(chan struct{}, 10) // buffered或者unbuffered
 var s string
 
 func f() {
@@ -4997,7 +4997,7 @@ func main() {
 <p>還是拿剛剛的這個例子來說，如果你把第 6 行替換成 close(ch)，也能保證同樣的執行順序。因為第 11 行從關閉的 ch 中讀取出零值後，第 6 行肯定被調用了。</p>
 <p><strong>第 3 條規則是</strong>，對於 unbuffered 的 Channel，也就是容量是 0 的 Channel，從此 Channel 中讀取數據的調用一定 happens before 往此 Channel 發送數據的調用完成。</p>
 <p>所以，在上面的這個例子中呢，如果想保持同樣的執行順序，也可以寫成這樣：</p>
-<pre><code>var ch = make(chan int)
+<pre><code class="language-go">var ch = make(chan int)
 var s string
 
 func f() {
@@ -5027,7 +5027,7 @@ func main() {
 <p>對於讀寫鎖 l 的 l.RLock 方法調用，如果存在一個 <strong>n</strong>，這次的 l.RLock 調用 happens after 第 n 次的 l.Unlock，那麼，和這個 RLock 相對應的 l.RUnlock 一定 happens before 第 n+1 次 l.Lock。意思是，讀寫鎖的 Lock 必須等待既有的讀鎖釋放後才能獲取到。</p>
 </blockquote>
 <p>我再舉個例子。在下面的代碼中，第 6 行第一次的 Unlock 一定 happens before 第二次的 Lock（第 12 行），所以這也能保證正確地打印出“hello world”。</p>
-<pre><code>var mu sync.Mutex
+<pre><code class="language-go">var mu sync.Mutex
 var s string
 
 func foo() {
@@ -5046,7 +5046,7 @@ func main() {
 <h2 id="once"><a class="header" href="#once">Once</a></h2>
 <p>我們在第 8 講學過 Once 了，相信你已經很熟悉它的功能了。它提供的保證是：<strong>對於 once.Do(f) 調用，f 函數的那個單次調用一定 happens before 任何 once.Do(f) 調用的返回</strong>。換句話說，就是函數 f 一定會在 Do 方法返回之前執行。</p>
 <p>還是以 hello world 的例子為例，這次我們使用 Once 併發原語實現，可以看下下面的代碼：</p>
-<pre><code>var s string
+<pre><code class="language-go">var s string
 var once sync.Once
 
 func foo() {
@@ -5065,7 +5065,7 @@ func twoprint() {
 <p>對於 Go 1.15 的官方實現來說，可以保證使用 atomic 的 Load/Store 的變量之間的順序性。</p>
 <p>在下面的例子中，打印出的 a 的結果總是 1，但是官方並沒有做任何文檔上的說明和保證。</p>
 <p>依照 Ian Lance Taylor 的說法，Go 核心開發組的成員幾乎沒有關注這個方向上的研究，因為這個問題太複雜，有很多問題需要去研究，所以，現階段還是不要使用 atomic 來保證順序性。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
   var a, b int32 = 0, 0
 
   go func() {
@@ -5107,7 +5107,7 @@ func twoprint() {
 <h2 id="pv-操作"><a class="header" href="#pv-操作">P/V 操作</a></h2>
 <p>Dijkstra 在他的論文中為信號量定義了兩個操作 P 和 V。P 操作（descrease、wait、acquire）是減少信號量的計數值，而 V 操作（increase、signal、release）是增加信號量的計數值。</p>
 <p>使用偽代碼表示如下（中括號代表原子操作）：</p>
-<pre><code>function V(semaphore S, integer I):
+<pre><code class="language-go">function V(semaphore S, integer I):
     [S ← S + I]
 
 function P(semaphore S, integer I):
@@ -5132,13 +5132,13 @@ function P(semaphore S, integer I):
 <p>好了，言歸正傳，剛剛我們掌握了信號量的含義和具體操作方式，下面，我們就來具體瞭解下官方擴展庫的實現。</p>
 <h1 id="go-官方擴展庫的實現"><a class="header" href="#go-官方擴展庫的實現">Go 官方擴展庫的實現</a></h1>
 <p>在運行時，Go 內部使用信號量來控制 goroutine 的阻塞和喚醒。我們在學習基本併發原語的實現時也看到了，比如互斥鎖的第二個字段：</p>
-<pre><code>type Mutex struct {
+<pre><code class="language-go">type Mutex struct {
     state int32
     sema  uint32
 }
 </code></pre>
 <p>信號量的 P/V 操作是通過函數實現的：</p>
-<pre><code>func runtime_Semacquire(s *uint32)
+<pre><code class="language-go">func runtime_Semacquire(s *uint32)
 func runtime_SemacquireMutex(s *uint32, lifo bool, skipframes int)
 func runtime_Semrelease(s *uint32, handoff bool, skipframes int)
 </code></pre>
@@ -5154,7 +5154,7 @@ func runtime_Semrelease(s *uint32, handoff bool, skipframes int)
 <p>知道了信號量的實現方法，在實際的場景中，我們應該怎麼用呢？我來舉個 Worker Pool 的例子，來幫助你理解。</p>
 <p>我們創建和 CPU 核數一樣多的 Worker，讓它們去處理一個 4 倍數量的整數 slice。每個 Worker 一次只能處理一個整數，處理完之後，才能處理下一個。</p>
 <p>當然，這個問題的解決方案有很多種，這一次我們使用信號量，代碼如下：</p>
-<pre><code>var (
+<pre><code class="language-go">var (
     maxWorkers = runtime.GOMAXPROCS(0)                    // worker數量
     sema       = semaphore.NewWeighted(int64(maxWorkers)) //信號量
     task       = make([]int, maxWorkers*4)                // 任務數，是worker的四倍
@@ -5189,7 +5189,7 @@ func main() {
 <p>需要提醒你的是，其實，在這個例子中，還有一個值得我們學習的知識點，就是最後的那一段處理（第 25 行）。<strong>如果在實際應用中，你想等所有的 Worker 都執行完，就可以獲取最大計數值的信號量</strong>。</p>
 <p>Go 擴展庫中的信號量是使用互斥鎖 +List 實現的。互斥鎖實現其它字段的保護，而 List 實現了一個等待隊列，等待者的通知是通過 Channel 的通知機制實現的。</p>
 <p>我們來看一下信號量 Weighted 的數據結構：</p>
-<pre><code>type Weighted struct {
+<pre><code class="language-go">type Weighted struct {
     size    int64         // 最大資源數
     cur     int64         // 當前已被使用的資源
     mu      sync.Mutex    // 互斥鎖，對字段的保護
@@ -5197,7 +5197,7 @@ func main() {
 }
 </code></pre>
 <p>在信號量的幾個實現方法裡，Acquire 是代碼最複雜的一個方法，它不僅僅要監控資源是否可用，而且還要檢測 Context 的 Done 是否已關閉。我們來看下它的實現代碼。</p>
-<pre><code>func (s *Weighted) Acquire(ctx context.Context, n int64) error {
+<pre><code class="language-go">func (s *Weighted) Acquire(ctx context.Context, n int64) error {
     s.mu.Lock()
         // fast path, 如果有足夠的資源，都不考慮ctx.Done的狀態，將cur加上n就返回
     if s.size-s.cur &gt;= n &amp;&amp; s.waiters.Len() == 0 {
@@ -5247,7 +5247,7 @@ func main() {
 </code></pre>
 <p>其實，為了提高性能，這個方法中的 fast path 之外的代碼，可以抽取成 acquireSlow 方法，以便其它 Acquire 被內聯。</p>
 <p>Release 方法將當前計數值減去釋放的資源數 n，並喚醒等待隊列中的調用者，看是否有足夠的資源被獲取。</p>
-<pre><code>func (s *Weighted) Release(n int64) {
+<pre><code class="language-go">func (s *Weighted) Release(n int64) {
     s.mu.Lock()
     s.cur -= n
     if s.cur &lt; 0 {
@@ -5259,7 +5259,7 @@ func main() {
 }
 </code></pre>
 <p>notifyWaiters 方法就是逐個檢查等待的調用者，如果資源不夠，或者是沒有等待者了，就返回：</p>
-<pre><code>func (s *Weighted) notifyWaiters() {
+<pre><code class="language-go">func (s *Weighted) notifyWaiters() {
     for {
       next := s.waiters.Front()
       if next == nil {
@@ -5297,7 +5297,7 @@ func main() {
 <p>除了官方擴展庫的實現，實際上，我們還有很多方法實現信號量，比較典型的就是使用 Channel 來實現。</p>
 <p>根據之前的 Channel 類型的介紹以及 Go 內存模型的定義，你應該能想到，使用一個 buffer 為 n 的 Channel 很容易實現信號量，比如下面的代碼，我們就是使用 chan struct{}類型來實現的。</p>
 <p>在初始化這個信號量的時候，我們設置它的初始容量，代表有多少個資源可以使用。它使用 Lock 和 Unlock 方法實現請求資源和釋放資源，正好實現了 Locker 接口。</p>
-<pre><code>  // Semaphore 數據結構，並且還實現了Locker接口
+<pre><code class="language-go">  // Semaphore 數據結構，並且還實現了Locker接口
   type semaphore struct {
     sync.Locker
     ch chan struct{}
@@ -5355,7 +5355,7 @@ func main() {
 </ol>
 <p>下面，我們來看具體的實現方法。</p>
 <p>首先，SingleFlight 定義一個輔助對象 call，這個 call 就代表正在執行 fn 函數的請求或者是已經執行完的請求。Group 代表 SingleFlight。</p>
-<pre><code>  // 代表一個正在處理的請求，或者已經處理完的請求
+<pre><code class="language-go">  // 代表一個正在處理的請求，或者已經處理完的請求
   type call struct {
     wg sync.WaitGroup
   
@@ -5378,7 +5378,7 @@ func main() {
   }
 </code></pre>
 <p>我們只需要查看一個 Do 方法，DoChan 的處理方法是類似的。</p>
-<pre><code>  func (g *Group) Do(key string, fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
+<pre><code class="language-go">  func (g *Group) Do(key string, fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
     g.mu.Lock()
     if g.m == nil {
       g.m = make(map[string]*call)
@@ -5400,7 +5400,7 @@ func main() {
   }
 </code></pre>
 <p>doCall 方法會實際調用函數 fn：</p>
-<pre><code>  func (g *Group) doCall(c *call, key string, fn func() (interface{}, error)) {
+<pre><code class="language-go">  func (g *Group) doCall(c *call, key string, fn func() (interface{}, error)) {
     c.val, c.err = fn()
     c.wg.Done()
   
@@ -5421,13 +5421,13 @@ func main() {
 <p>瞭解了 SingleFlight 的實現原理，下面我們來看看它都應用於什麼場景中。</p>
 <p>Go 代碼庫中有兩個地方用到了 SingleFlight。</p>
 <p>第一個是在net/lookup.go中，如果同時有查詢同一個 host 的請求，lookupGroup 會把這些請求 merge 到一起，只需要一個請求就可以了：</p>
-<pre><code>// lookupGroup merges LookupIPAddr calls together for lookups for the same
+<pre><code class="language-go">// lookupGroup merges LookupIPAddr calls together for lookups for the same
 // host. The lookupGroup key is the LookupIPAddr.host argument.
 // The return values are ([]IPAddr, error).
 lookupGroup singleflight.Group
 </code></pre>
 <p>第二個是 Go 在查詢倉庫版本信息時，將併發的請求合併成 1 個請求：</p>
-<pre><code>func metaImportsForPrefix(importPrefix string, mod ModuleMode, security web.SecurityMode) (*urlpkg.URL, []metaImport, error) {
+<pre><code class="language-go">func metaImportsForPrefix(importPrefix string, mod ModuleMode, security web.SecurityMode) (*urlpkg.URL, []metaImport, error) {
         // 使用緩存保存請求結果
     setCache := func(res fetchResult) (fetchResult, error) {
       fetchCacheMu.Lock()
@@ -5451,10 +5451,10 @@ lookupGroup singleflight.Group
 <p>用 SingleFlight 來解決緩存擊穿問題再合適不過了。因為，這個時候，只要這些對同一個 key 的併發請求的其中一個到數據庫中查詢，就可以了，這些併發的請求可以共享同一個結果。因為是緩存查詢，不用考慮冪等性問題。</p>
 <p>事實上，在 Go 生態圈知名的緩存框架 groupcache 中，就使用了較早的 Go 標準庫的 SingleFlight 實現。接下來，我就來給你介紹一下 groupcache 是如何使用 SingleFlight 解決緩存擊穿問題的。</p>
 <p>groupcache 中的 SingleFlight 只有一個方法：</p>
-<pre><code>func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, error)
+<pre><code class="language-go">func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, error)
 </code></pre>
 <p>SingleFlight 的作用是，在加載一個緩存項的時候，合併對同一個 key 的 load 的併發請求：</p>
-<pre><code>  type Group struct {
+<pre><code class="language-go">  type Group struct {
     。。。。。。
     // loadGroup ensures that each key is only fetched once
     // (either locally or remotely), regardless of the number of
@@ -5493,11 +5493,11 @@ lookupGroup singleflight.Group
 <li>第二個方法是 NewWithAction，它額外提供一個函數，可以在每一次到達執行點的時候執行一次。具體的時間點是在最後一個參與者到達之後，但是其它的參與者還未被放行之前。我們可以利用它，做放行之前的一些共享狀態的更新等操作。</li>
 </ol>
 <p>這兩個方法的簽名如下：</p>
-<pre><code>func New(parties int) CyclicBarrier
+<pre><code class="language-go">func New(parties int) CyclicBarrier
 func NewWithAction(parties int, barrierAction func() error) CyclicBarrier
 </code></pre>
 <p>CyclicBarrier 是一個接口，定義的方法如下：</p>
-<pre><code>type CyclicBarrier interface {
+<pre><code class="language-go">type CyclicBarrier interface {
     // 等待所有的參與者到達，如果被ctx.Done()中斷，會返回ErrBrokenBarrier
     Await(ctx context.Context) error
 
@@ -5538,7 +5538,7 @@ func NewWithAction(parties int, barrierAction func() error) CyclicBarrier
 <li>循環柵欄：等待兩個氫原子和一個氧原子填補空槽，直到任務完成。</li>
 </ol>
 <p>我們來看下具體的代碼：</p>
-<pre><code>package water
+<pre><code class="language-go">package water
 import (
   "context"
   "github.com/marusama/cyclicbarrier"
@@ -5560,7 +5560,7 @@ func New() *H2O {
 </code></pre>
 <p>接下來，我們看看各條流水線的處理情況。</p>
 <p>流水線分為氫原子處理流水線和氧原子處理流水線，首先，我們先看一下氫原子的流水線：如果有可用的空槽，氫原子的流水線的處理方法是 hydrogen，hydrogen 方法就會佔用一個空槽（h2o.semaH.Acquire），輸出一個 H 字符，然後等待柵欄放行。等其它的 goroutine 填補了氫原子的另一個空槽和氧原子的空槽之後，程序才可以繼續進行。</p>
-<pre><code>func (h2o *H2O) hydrogen(releaseHydrogen func()) {
+<pre><code class="language-go">func (h2o *H2O) hydrogen(releaseHydrogen func()) {
   h2o.semaH.Acquire(context.Background(), 1)
 
   releaseHydrogen() // 輸出H
@@ -5569,7 +5569,7 @@ func New() *H2O {
 }
 </code></pre>
 <p>然後是氧原子的流水線。氧原子的流水線處理方法是 oxygen， oxygen 方法是等待氧原子的空槽，然後輸出一個 O，就等待柵欄放行。放行後，釋放氧原子空槽位。</p>
-<pre><code>func (h2o *H2O) oxygen(releaseOxygen func()) {
+<pre><code class="language-go">func (h2o *H2O) oxygen(releaseOxygen func()) {
   h2o.semaO.Acquire(context.Background(), 1)
 
   releaseOxygen() // 輸出O
@@ -5579,7 +5579,7 @@ func New() *H2O {
 </code></pre>
 <p>在柵欄放行之前，只有兩個氫原子的空槽位和一個氧原子的空槽位。只有等柵欄放行之後，這些空槽位才會被釋放。柵欄放行，就意味著一個水分子組成成功。</p>
 <p>這個算法是不是正確呢？我們來編寫一個單元測試檢測一下。</p>
-<pre><code>package water
+<pre><code class="language-go">package water
 
 import (
     "math/rand"
@@ -5650,7 +5650,7 @@ func TestWaterFactory(t *testing.T) {
 }總結每一個併發原語都有它存在的道理，也都有它應用的場景。
 </code></pre>
 <p>如果你沒有學習 CyclicBarrier，你可能只會想到，用 WaitGroup 來實現這個水分子製造工廠的例子。</p>
-<pre><code>type H2O struct {
+<pre><code class="language-go">type H2O struct {
     semaH *semaphore.Weighted
     semaO *semaphore.Weighted
     wg    sync.WaitGroup //將循環柵欄替換成WaitGroup
@@ -5714,20 +5714,20 @@ func (h2o *H2O) oxygen(releaseOxygen func()) {
 <p>在使用 ErrGroup 時，我們要用到三個方法，分別是 WithContext、Go 和 Wait。</p>
 <p><strong>1.WithContext</strong></p>
 <p>在創建一個 Group 對象時，需要使用 WithContext 方法：</p>
-<pre><code>func WithContext(ctx context.Context) (*Group, context.Context)
+<pre><code class="language-go">func WithContext(ctx context.Context) (*Group, context.Context)
 </code></pre>
 <p>這個方法返回一個 Group 實例，同時還會返回一個使用 context.WithCancel(ctx) 生成的新 Context。一旦有一個子任務返回錯誤，或者是 Wait 調用返回，這個新 Context 就會被 cancel。</p>
 <p>Group 的零值也是合法的，只不過，你就沒有一個可以監控是否 cancel 的 Context 了。</p>
 <p>注意，如果傳遞給 WithContext 的 ctx 參數，是一個可以 cancel 的 Context 的話，那麼，它被 cancel 的時候，並不會終止正在執行的子任務。</p>
 <p><strong>2.Go</strong></p>
 <p>我們再來學習下執行子任務的 Go 方法：</p>
-<pre><code>func (g *Group) Go(f func() error)
+<pre><code class="language-go">func (g *Group) Go(f func() error)
 </code></pre>
 <p>傳入的子任務函數 f 是類型為 func() error 的函數，如果任務執行成功，就返回 nil，否則就返回 error，並且會 cancel 那個新的 Context。</p>
 <p>一個任務可以分成好多個子任務，而且，可能有多個子任務執行失敗返回 error，不過，Wait 方法只會返回第一個錯誤，所以，如果想返回所有的錯誤，需要特別的處理，我先留個小懸念，一會兒再講。</p>
 <p><strong>3.Wait</strong></p>
 <p>類似 WaitGroup，Group 也有 Wait 方法，等所有的子任務都完成後，它才會返回，否則只會阻塞等待。如果有多個子任務返回錯誤，它只會返回第一個出現的錯誤，如果所有的子任務都執行成功，就返回 nil：</p>
-<pre><code>func (g *Group) Wait() errorErrGroup 使用例子好了，知道了基本用法，下面我來給你介紹幾個例子，幫助你全面地掌握 ErrGroup 的使用方法和應用場景。簡單例子：返回第一個錯誤先來看一個簡單的例子。在這個例子中，啟動了三個子任務，其中，子任務 2 會返回執行失敗，其它兩個執行成功。在三個子任務都執行後，group.Wait 才會返回第 2 個子任務的錯誤。
+<pre><code class="language-go">func (g *Group) Wait() errorErrGroup 使用例子好了，知道了基本用法，下面我來給你介紹幾個例子，幫助你全面地掌握 ErrGroup 的使用方法和應用場景。簡單例子：返回第一個錯誤先來看一個簡單的例子。在這個例子中，啟動了三個子任務，其中，子任務 2 會返回執行失敗，其它兩個執行成功。在三個子任務都執行後，group.Wait 才會返回第 2 個子任務的錯誤。
 
 package main
 
@@ -5774,7 +5774,7 @@ func main() {
 <h3 id="更進一步返回所有子任務的錯誤"><a class="header" href="#更進一步返回所有子任務的錯誤">更進一步，返回所有子任務的錯誤</a></h3>
 <p>Group 只能返回子任務的第一個錯誤，後續的錯誤都會被丟棄。但是，有時候我們需要知道每個任務的執行情況。怎麼辦呢？這個時候，我們就可以用稍微有點曲折的方式去實現。我們使用一個 result slice 保存子任務的執行結果，這樣，通過查詢 result，就可以知道每一個子任務的結果了。</p>
 <p>下面的這個例子，就是使用 result 記錄每個子任務成功或失敗的結果。其實，你不僅可以使用 result 記錄 error 信息，還可以用它記錄計算結果。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "errors"
@@ -5821,7 +5821,7 @@ func main() {
 }任務執行流水線 PipelineGo 官方文檔中還提供了一個 pipeline 的例子。這個例子是說，由一個子任務遍歷文件夾下的文件，然後把遍歷出的文件交給 20 個 goroutine，讓這些 goroutine 並行計算文件的 md5。
 </code></pre>
 <p>這個例子中的計算邏輯你不需要重點掌握，我來把這個例子簡化一下（如果你想看原始的代碼，可以看這裡）：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
    ......
@@ -5903,7 +5903,7 @@ func MD5All(ctx context.Context, root string) (map[string][md5.Size]byte, error)
 <p>另外，這個庫其實是有一個併發問題的。在高併發的情況下，如果任務數大於設定的 goroutine 的數量，並且這些任務被集中加入到 Group 中，這個庫的處理方式是把子任務加入到一個數組中，但是，這個數組不是線程安全的，有併發問題，問題就在於，下面圖片中的標記為 96 行的那一行，這一行對 slice 的 append 操作不是線程安全的：</p>
 <p><img src="./images/3fb3c2c985e10a55ebc114bc9cbe27a2.png" alt="" /></p>
 <p>我們可以寫一個簡單的程序來測試這個問題：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "context"
@@ -5949,7 +5949,7 @@ func main() {
 <p>運行這個程序的話，你就會發現死鎖問題，因為我們的測試程序是一個簡單的命令行工具，程序退出的時候，Go runtime 能檢測到死鎖問題。如果是一直運行的服務器程序，死鎖問題有可能是檢測不出來的，程序一直會 hang 在 Wait 的調用上。</p>
 <h3 id="neilotooleerrgroup"><a class="header" href="#neilotooleerrgroup">neilotoole/errgroup</a></h3>
 <p>neilotoole/errgroup 是今年年中新出現的一個 ErrGroup 擴展庫，它可以直接替換官方的 ErrGroup，方法都一樣，原有功能也一樣，只不過<strong>增加了可以控制併發 goroutine 的功能</strong>。它的方法集如下：</p>
-<pre><code>type Group
+<pre><code class="language-go">type Group
   func WithContext(ctx context.Context) (*Group, context.Context)
   func WithContextN(ctx context.Context, numG, qSize int) (*Group, context.Context)
   func (g *Group) Go(f func() error)
@@ -5961,7 +5961,7 @@ func main() {
 <p>Facebook 提供的這個 ErrGroup，其實並不是對 Go 擴展庫 ErrGroup 的擴展，而是對標準庫 WaitGroup 的擴展。不過，因為它們的名字一樣，處理的場景也類似，所以我把它也列在了這裡。</p>
 <p>標準庫的 WaitGroup 只提供了 Add、Done、Wait 方法，而且 Wait 方法也沒有返回子 goroutine 的 error。而 Facebook 提供的 ErrGroup 提供的 Wait 方法可以返回 error，而且可以包含多個 error。子任務在調用 Done 之前，可以把自己的 error 信息設置給 ErrGroup。接著，Wait 在返回的時候，就會把這些 error 信息返回給調用者。</p>
 <p>我們來看下 Group 的方法：</p>
-<pre><code>type Group
+<pre><code class="language-go">type Group
   func (g *Group) Add(delta int)
   func (g *Group) Done()
   func (g *Group) Error(e error)
@@ -5970,7 +5970,7 @@ func main() {
 <p>關於 Wait 方法，我剛剛已經介紹了它和標準庫 WaitGroup 的不同，我就不多說了。這裡還有一個不同的方法，就是 Error 方法，</p>
 <p>我舉個例子演示一下 Error 的使用方法。</p>
 <p>在下面的這個例子中，第 26 行的子 goroutine 設置了 error 信息，第 39 行會把這個 error 信息輸出出來。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "errors"
@@ -6023,7 +6023,7 @@ func main() {
 <p><strong>默認情況下，SizedGroup 控制的是子任務的併發數量，而不是 goroutine 的數量</strong>。在這種方式下，每次調用 Go 方法都不會被阻塞，而是新建一個 goroutine 去執行。</p>
 <p>如果想控制 goroutine 的數量，你可以使用 syncs.Preemptive 設置這個併發原語的可選項。如果設置了這個可選項，但在調用 Go 方法的時候沒有可用的 goroutine，那麼調用者就會等待，直到有 goroutine 可以處理這個子任務才返回，這個控制在內部是使用信號量實現的。</p>
 <p>我們來看一個使用 SizedGroup 的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "context"
@@ -6066,15 +6066,15 @@ func main() {
 <p>接下來，我們看一下它提供的三個方法，分別是 <strong>All、Race 和 Retry</strong>。</p>
 <p><strong>All 方法</strong></p>
 <p>All 方法的簽名如下：</p>
-<pre><code>func All(ctx context.Context, fns ...AsyncFunc) ([]interface{}, []error)
+<pre><code class="language-go">func All(ctx context.Context, fns ...AsyncFunc) ([]interface{}, []error)
 </code></pre>
 <p>它會等待所有的異步函數（AsyncFunc）都執行完才返回，而且返回結果的順序和傳入的函數的順序保持一致。第一個返回參數是子任務的執行結果，第二個參數是子任務執行時的錯誤信息。</p>
 <p>其中，異步函數的定義如下：</p>
-<pre><code>type AsyncFunc func(ctx context.Context) (interface{}, error)
+<pre><code class="language-go">type AsyncFunc func(ctx context.Context) (interface{}, error)
 </code></pre>
 <p>可以看到，ctx 會被傳遞給子任務。如果你 cancel 這個 ctx，可以取消子任務。</p>
 <p>我們來看一個使用 All 方法的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
   "context"
@@ -6106,16 +6106,16 @@ func main() {
 <p><strong>Race 方法</strong></p>
 <p>Race 方法跟 All 方法類似，只不過，在使用 Race 方法的時候，只要一個異步函數執行沒有錯誤，就立馬返回，而不會返回所有的子任務信息。如果所有的子任務都沒有成功，就會返回最後一個 error 信息。</p>
 <p>Race 方法簽名如下：</p>
-<pre><code>func Race(ctx context.Context, fns ...AsyncFunc) (interface{}, error)
+<pre><code class="language-go">func Race(ctx context.Context, fns ...AsyncFunc) (interface{}, error)
 </code></pre>
 <p>如果有一個正常的子任務的結果返回，Race 會把傳入到其它子任務的 Context cancel 掉，這樣子任務就可以中斷自己的執行。</p>
 <p>Race 的使用方法也跟 All 方法類似，我就不再舉例子了，你可以把 All 方法的例子中的 All 替換成 Race 方式測試下。</p>
 <p><strong>Retry 方法</strong></p>
 <p><strong>Retry 不是執行一組子任務，而是執行一個子任務</strong>。如果子任務執行失敗，它會嘗試一定的次數，如果一直不成功 ，就會返回失敗錯誤 ，如果執行成功，它會立即返回。如果 retires 等於 0，它會永遠嘗試，直到成功。</p>
-<pre><code>func Retry(ctx context.Context, retires int, fn AsyncFunc) (interface{}, error)
+<pre><code class="language-go">func Retry(ctx context.Context, retires int, fn AsyncFunc) (interface{}, error)
 </code></pre>
 <p>再來看一個使用 Retry 的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
   "context"
@@ -6139,32 +6139,32 @@ func main() {
 } HunchHunch提供的功能和 gollback 類似，不過它提供的方法更多，而且它提供的和 gollback 相應的方法，也有一些不同。我來一一介紹下。
 </code></pre>
 <p>它定義了執行子任務的函數，這和 gollback 的 AyncFunc 是一樣的，它的定義如下：</p>
-<pre><code>type Executable func(context.Context) (interface{}, error)
+<pre><code class="language-go">type Executable func(context.Context) (interface{}, error)
 </code></pre>
 <p><strong>All 方法</strong></p>
 <p>All 方法的簽名如下：</p>
-<pre><code>func All(parentCtx context.Context, execs ...Executable) ([]interface{}, error)
+<pre><code class="language-go">func All(parentCtx context.Context, execs ...Executable) ([]interface{}, error)
 </code></pre>
 <p>它會傳入一組可執行的函數（子任務），返回子任務的執行結果。和 gollback 的 All 方法不一樣的是，一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p><strong>Take 方法</strong></p>
 <p>Take 方法的簽名如下：</p>
-<pre><code>func Take(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
+<pre><code class="language-go">func Take(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
 </code></pre>
 <p>你可以指定 num 參數，只要有 num 個子任務正常執行完沒有錯誤，這個方法就會返回這幾個子任務的結果。一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p><strong>Last 方法</strong></p>
 <p>Last 方法的簽名如下：</p>
-<pre><code>func Last(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
+<pre><code class="language-go">func Last(parentCtx context.Context, num int, execs ...Executable) ([]interface{}, error)
 </code></pre>
 <p>它只返回最後 num 個正常執行的、沒有錯誤的子任務的結果。一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p>比如 num 等於 1，那麼，它只會返回最後一個無錯的子任務的結果。</p>
 <p><strong>Retry 方法</strong></p>
 <p>Retry 方法的簽名如下：</p>
-<pre><code>func Retry(parentCtx context.Context, retries int, fn Executable) (interface{}, error)
+<pre><code class="language-go">func Retry(parentCtx context.Context, retries int, fn Executable) (interface{}, error)
 </code></pre>
 <p>它的功能和 gollback 的 Retry 方法的功能一樣，如果子任務執行出錯，就會不斷嘗試，直到成功或者是達到重試上限。如果達到重試上限，就會返回錯誤。如果 retries 等於 0，它會不斷嘗試。</p>
 <p><strong>Waterfall 方法</strong></p>
 <p>Waterfall 方法簽名如下：</p>
-<pre><code>func Waterfall(parentCtx context.Context, execs ...ExecutableInSequence) (interface{}, error)
+<pre><code class="language-go">func Waterfall(parentCtx context.Context, execs ...ExecutableInSequence) (interface{}, error)
 </code></pre>
 <p>它其實是一個 pipeline 的處理方式，所有的子任務都是串行執行的，前一個子任務的執行結果會被當作參數傳給下一個子任務，直到所有的任務都完成，返回最後的執行結果。一旦一個子任務出現錯誤，它就會返回錯誤信息，執行結果（第一個返回參數）為 nil。</p>
 <p>gollback 和 Hunch 是屬於同一類的併發原語，對一組子任務的執行結果，可以選擇一個結果或者多個結果，這也是現在熱門的微服務常用的服務治理的方法。</p>
@@ -6172,7 +6172,7 @@ func main() {
 <p>接下來，我再介紹一個<strong>和時間相關的處理一組 goroutine 的併發原語 schedgroup</strong>。</p>
 <p>schedgroup是 Matt Layher 開發的 worker pool，可以指定任務在某個時間或者某個時間之後執行。Matt Layher 也是一個知名的 Gopher，經常在一些會議上分享一些他的 Go 開發經驗，他在 GopherCon Europe 2020 大會上專門介紹了這個併發原語：schedgroup: a timer-based goroutine concurrency primitive ，課下你可以點開這個鏈接看一下，下面我來給你介紹一些重點。</p>
 <p>這個併發原語包含的方法如下：</p>
-<pre><code>type Group
+<pre><code class="language-go">type Group
   func New(ctx context.Context) *Group
   func (g *Group) Delay(delay time.Duration, fn func())
   func (g *Group) Schedule(when time.Time, fn func())
@@ -6188,7 +6188,7 @@ func main() {
 <p><strong>第二點是，Wait 方法只能調用一次，如果多次調用的話，就會 panic。</strong></p>
 <p>你可能認為，簡單地使用 timer 就可以實現這個功能。其實，如果只有幾個子任務，使用 timer 不是問題，但一旦有大量的子任務，而且還要能夠 cancel，那麼，使用 timer 的話，CPU 資源消耗就比較大了。所以，schedgroup 在實現的時候，就使用 container/heap，按照子任務的執行時間進行排序，這樣可以避免使用大量的 timer，從而提高性能。</p>
 <p>我們來看一個使用 schedgroup 的例子，下面代碼會依次輸出 1、2、3：</p>
-<pre><code>sg := schedgroup.New(context.Background())
+<pre><code class="language-go">sg := schedgroup.New(context.Background())
 
 // 設置子任務分別在100、200、300之後執行
 for i := 0; i &lt; 3; i++ {
@@ -6227,7 +6227,7 @@ if err := sg.Wait(); err != nil {
 <p>我要先提醒你一句，如果你想運行我下面講到的測試代碼，就要先部署一個 etcd 的集群，或者部署一個 etcd 節點做測試。</p>
 <p>首先，我們來實現一個測試分佈式程序的框架：它會先從命令行中讀取命令，然後再執行相應的命令。你可以打開兩個窗口，模擬不同的節點，分別執行不同的命令。</p>
 <p>這個測試程序如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 // 導入所需的庫
 import (
@@ -6300,7 +6300,7 @@ func main() {
 <p>如果你的業務集群還沒有主節點，或者主節點宕機了，你就需要發起新一輪的選主操作，主要會用到 <strong>Campaign 和 Proclaim</strong>。如果你需要主節點放棄主的角色，讓其它從節點有機會成為主節點，就可以調用 <strong>Resign</strong> 方法。</p>
 <p>這裡我提到了三個和選主相關的方法，下面我來介紹下它們的用法。</p>
 <p><strong>第一個方法是 Campaign</strong>。它的作用是，把一個節點選舉為主節點，並且會設置一個值。它的簽名如下所示：</p>
-<pre><code>func (e *Election) Campaign(ctx context.Context, val string) error
+<pre><code class="language-go">func (e *Election) Campaign(ctx context.Context, val string) error
 </code></pre>
 <p>需要注意的是，這是一個阻塞方法，在調用它的時候會被阻塞，直到滿足下面的三個條件之一，才會取消阻塞。</p>
 <ol>
@@ -6309,13 +6309,13 @@ func main() {
 <li>ctx 被取消。</li>
 </ol>
 <p><strong>第二個方法是 Proclaim</strong>。它的作用是，重新設置 Leader 的值，但是不會重新選主，這個方法會返回新值設置成功或者失敗的信息。方法簽名如下所示：</p>
-<pre><code>func (e *Election) Proclaim(ctx context.Context, val string) error
+<pre><code class="language-go">func (e *Election) Proclaim(ctx context.Context, val string) error
 </code></pre>
 <p><strong>第三個方法是 Resign</strong>：開始新一次選舉。這個方法會返回新的選舉成功或者失敗的信息。它的簽名如下所示：</p>
-<pre><code>func (e *Election) Resign(ctx context.Context) (err error)
+<pre><code class="language-go">func (e *Election) Resign(ctx context.Context) (err error)
 </code></pre>
 <p>這三個方法的測試代碼如下。你可以使用測試程序進行測試，具體做法是，啟動兩個節點，執行和這三個方法相關的命令。</p>
-<pre><code>var count int
+<pre><code class="language-go">var count int
 // 選主
 func elect(e1 *concurrency.Election, electName string) {
     log.Println("acampaigning for ID:", *nodeID)
@@ -6347,13 +6347,13 @@ func resign(e1 *concurrency.Election, electName string) {
 }查詢除了選舉 Leader，程序在啟動的過程中，或者在運行的時候，還有可能需要查詢當前的主節點是哪一個節點？主節點的值是什麼？版本是多少？不光是主從節點需要查詢和知道哪一個節點，在分佈式系統中，還有其它一些節點也需要知道集群中的哪一個節點是主節點，哪一個節點是從節點，這樣它們才能把讀寫請求分別發往相應的主從節點上。
 </code></pre>
 <p>etcd 提供了查詢當前 Leader 的方法 <strong>Leader</strong>，如果當前還沒有 Leader，就返回一個錯誤，你可以使用這個方法來查詢主節點信息。這個方法的簽名如下：</p>
-<pre><code>func (e *Election) Leader(ctx context.Context) (*v3.GetResponse, error)
+<pre><code class="language-go">func (e *Election) Leader(ctx context.Context) (*v3.GetResponse, error)
 </code></pre>
 <p>每次主節點的變動都會生成一個新的版本號，你還可以查詢版本號信息（<strong>Rev</strong> 方法），瞭解主節點變動情況：</p>
-<pre><code>func (e *Election) Rev() int64
+<pre><code class="language-go">func (e *Election) Rev() int64
 </code></pre>
 <p>你可以在測試完選主命令後，測試查詢命令（query、rev），代碼如下：</p>
-<pre><code>// 查詢主的信息
+<pre><code class="language-go">// 查詢主的信息
 func query(e1 *concurrency.Election, electName string) {
     // 調用Leader返回主的信息，包括key和value等信息
     resp, err := e1.Leader(context.Background())
@@ -6369,11 +6369,11 @@ func rev(e1 *concurrency.Election, electName string) {
 }監控有了選舉和查詢方法，我們還需要一個監控方法。畢竟，如果主節點變化了，我們需要得到最新的主節點信息。
 </code></pre>
 <p>我們可以通過 Observe 來監控主的變化，它的簽名如下：</p>
-<pre><code>func (e *Election) Observe(ctx context.Context) &lt;-chan v3.GetResponse
+<pre><code class="language-go">func (e *Election) Observe(ctx context.Context) &lt;-chan v3.GetResponse
 </code></pre>
 <p>它會返回一個 chan，顯示主節點的變動信息。需要注意的是，它不會返回主節點的全部歷史變動信息，而是隻返回最近的一條變動信息以及之後的變動信息。</p>
 <p>它的測試代碼如下：</p>
-<pre><code>func watch(e1 *concurrency.Election, electName string) {
+<pre><code class="language-go">func watch(e1 *concurrency.Election, electName string) {
     ch := e1.Observe(context.TODO())
 
     log.Println("start to watch for ID:", *nodeID)
@@ -6392,10 +6392,10 @@ func rev(e1 *concurrency.Election, electName string) {
 <p>下面，我們就來學習下互斥鎖相關的兩個原語，即 Locker 和 Mutex。</p>
 <h2 id="locker"><a class="header" href="#locker">Locker</a></h2>
 <p>etcd 提供了一個簡單的 Locker 原語，它類似於 Go 標準庫中的 sync.Locker 接口，也提供了 Lock/UnLock 的機制：</p>
-<pre><code>func NewLocker(s *Session, pfx string) sync.Locker
+<pre><code class="language-go">func NewLocker(s *Session, pfx string) sync.Locker
 </code></pre>
 <p>可以看到，它的返回值是一個 sync.Locker，因為你對標準庫的 Locker 已經非常瞭解了，而且它只有 Lock/Unlock 兩個方法，所以，接下來使用這個鎖就非常容易了。下面的代碼是一個使用 Locker 併發原語的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "flag"
@@ -6453,7 +6453,7 @@ func useLock(cli *clientv3.Client) {
 <p>你可以同時在兩個終端中運行這個測試程序。可以看到，它們獲得鎖是有先後順序的，一個節點釋放了鎖之後，另外一個節點才能獲取到這個分佈式鎖。</p>
 <h2 id="mutex"><a class="header" href="#mutex">Mutex</a></h2>
 <p>事實上，剛剛說的 Locker 是基於 Mutex 實現的，只不過，Mutex 提供了查詢 Mutex 的 key 的信息的功能。測試代碼也類似：</p>
-<pre><code>func useMutex(cli *clientv3.Client) {
+<pre><code class="language-go">func useMutex(cli *clientv3.Client) {
     // 為鎖生成session
     s1, err := concurrency.NewSession(cli)
     if err != nil {
@@ -6485,7 +6485,7 @@ func useLock(cli *clientv3.Client) {
 <h1 id="讀寫鎖"><a class="header" href="#讀寫鎖">讀寫鎖</a></h1>
 <p>學完了分佈式 Locker 和互斥鎖 Mutex，你肯定會聯想到讀寫鎖 RWMutex。是的，etcd 也提供了分佈式的讀寫鎖。不過，互斥鎖 Mutex 是在 github.com/coreos/etcd/clientv3/concurrency 包中提供的，讀寫鎖 RWMutex 卻是在 github.com/coreos/etcd/contrib/recipes 包中提供的。</p>
 <p>etcd 提供的分佈式讀寫鎖的功能和標準庫的讀寫鎖的功能是一樣的。只不過，<strong>etcd 提供的讀寫鎖，可以在分佈式環境中的不同的節點使用</strong>。它提供的方法也和標準庫中的讀寫鎖的方法一致，分別提供了 RLock/RUnlock、Lock/Unlock 方法。下面的代碼是使用讀寫鎖的例子，它從命令行中讀取命令，執行讀寫鎖的操作：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -6599,10 +6599,10 @@ func testReadLocker(m1 *recipe.RWMutex) {
 <p>etcd 集群的可用性由 etcd 集群的維護者來保證，我們不用擔心網絡分區、節點宕機等問題。我們可以把這些通通交給 etcd 的運維人員，把我們自己的關注點放在使用上。</p>
 <p>下面，我們就來了解下 etcd 提供的分佈式隊列。etcd 通過 github.com/coreos/etcd/contrib/recipes 包提供了分佈式隊列這種數據結構。</p>
 <p>創建分佈式隊列的方法非常簡單，只有一個，即 NewQueue，你只需要傳入 etcd 的 client 和這個隊列的名字，就可以了。代碼如下：</p>
-<pre><code>func NewQueue(client *v3.Client, keyPrefix string) *Queue
+<pre><code class="language-go">func NewQueue(client *v3.Client, keyPrefix string) *Queue
 </code></pre>
 <p><strong>這個隊列只有兩個方法，分別是出隊和入隊，隊列中的元素是字符串類型</strong>。這兩個方法的簽名如下所示：</p>
-<pre><code>// 入隊
+<pre><code class="language-go">// 入隊
 func (q *Queue) Enqueue(val string) error
 //出隊
 func (q *Queue) Dequeue() (string, error)
@@ -6612,7 +6612,7 @@ func (q *Queue) Dequeue() (string, error)
 <p>在我接下來講的例子中，你就可以啟動兩個節點，一個節點往隊列中放入元素，一個節點從隊列中取出元素，看看是否能正常取出來。etcd 的分佈式隊列是一種多讀多寫的隊列，所以，你也可以啟動多個寫節點和多個讀節點。</p>
 <p>下面我們來藉助代碼，看一下如何實現分佈式隊列。</p>
 <p>首先，我們啟動一個程序，它會從命令行讀取你的命令，然後執行。你可以輸入<code>push &lt;value&gt;</code>，將一個元素入隊，輸入<code>pop</code>，將一個元素彈出。另外，你還可以使用這個程序啟動多個實例，用來模擬分佈式的環境：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -6677,7 +6677,7 @@ func main() {
 <p>除了剛剛說的分佈式隊列，etcd 還提供了優先級隊列（PriorityQueue）。</p>
 <p>它的用法和隊列類似，也提供了出隊和入隊的操作，只不過，在入隊的時候，除了需要把一個值加入到隊列，我們還需要提供 uint16 類型的一個整數，作為此值的優先級，優先級高的元素會優先出隊。</p>
 <p>優先級隊列的測試程序如下，你可以在一個節點輸入一些不同優先級的元素，在另外一個節點讀取出來，看看它們是不是按照優先級順序彈出的：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -6757,10 +6757,10 @@ func main() {
 <h2 id="barrier分佈式柵欄"><a class="header" href="#barrier分佈式柵欄">Barrier：分佈式柵欄</a></h2>
 <p>我們先來學習下分佈式 Barrier。</p>
 <p>分佈式 Barrier 的創建很簡單，你只需要提供 etcd 的 Client 和 Barrier 的名字就可以了，如下所示：</p>
-<pre><code>func NewBarrier(client *v3.Client, key string) *Barrier
+<pre><code class="language-go">func NewBarrier(client *v3.Client, key string) *Barrier
 </code></pre>
 <p>Barrier 提供了三個方法，分別是 Hold、**Release 和 Wait，**代碼如下：</p>
-<pre><code>func (b *Barrier) Hold() error
+<pre><code class="language-go">func (b *Barrier) Hold() error
 func (b *Barrier) Release() error
 func (b *Barrier) Wait() error
 </code></pre>
@@ -6771,7 +6771,7 @@ func (b *Barrier) Wait() error
 </ol>
 <p><strong>學習併發原語最好的方式就是使用它</strong>。下面我們就來藉助一個例子，來看看 Barrier 該怎麼用。</p>
 <p>你可以在一個終端中運行這個程序，執行"hold""release"命令，模擬柵欄的持有和釋放。在另外一個終端中運行這個程序，不斷調用"wait"方法，看看是否能正常地跳出阻塞繼續執行：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -6832,14 +6832,14 @@ func main() {
 func NewDoubleBarrier(s *concurrency.Session, key string, count int) *DoubleBarrier
 </code></pre>
 <p>同時，它還提供了兩個方法，分別是 Enter 和 Leave，代碼如下：</p>
-<pre><code>func (b *DoubleBarrier) Enter() error
+<pre><code class="language-go">func (b *DoubleBarrier) Enter() error
 func (b *DoubleBarrier) Leave() error
 </code></pre>
 <p>我來解釋下這兩個方法的作用。</p>
 <p>當調用者調用 Enter 時，會被阻塞住，直到一共有 count（初始化這個柵欄的時候設定的值）個節點調用了 Enter，這 count 個被阻塞的節點才能繼續執行。所以，你可以利用它編排一組節點，讓這些節點在同一個時刻開始執行任務。</p>
 <p>同理，如果你想讓一組節點在同一個時刻完成任務，就可以調用 Leave 方法。節點調用 Leave 方法的時候，會被阻塞，直到有 count 個節點，都調用了 Leave 方法，這些節點才能繼續執行。</p>
 <p>我們再來看一下 DoubleBarrier 的使用例子。你可以起兩個節點，同時執行 Enter 方法，看看這兩個節點是不是先阻塞，之後才繼續執行。然後，你再執行 Leave 方法，也觀察一下，是不是先阻塞又繼續執行的。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -6908,10 +6908,10 @@ func main() {
 <p>在學習 STM 之前，我們要先了解一下 etcd 的事務以及它的問題。</p>
 <p>etcd 提供了在一個事務中對多個 key 的更新功能，這一組 key 的操作要麼全部成功，要麼全部失敗。etcd 的事務實現方式是基於 CAS 方式實現的，融合了 Get、Put 和 Delete 操作。</p>
 <p>etcd 的事務操作如下，分為條件塊、成功塊和失敗塊，條件塊用來檢測事務是否成功，如果成功，就執行 Then(...)，如果失敗，就執行 Else(...)：</p>
-<pre><code>Txn().If(cond1, cond2, ...).Then(op1, op2, ...,).Else(op1’, op2’, …)
+<pre><code class="language-go">Txn().If(cond1, cond2, ...).Then(op1, op2, ...,).Else(op1’, op2’, …)
 </code></pre>
 <p>我們來看一個利用 etcd 的事務實現轉賬的小例子。我們從賬戶 from 向賬戶 to 轉賬 amount，代碼如下：</p>
-<pre><code>func doTxnXfer(etcd *v3.Client, from, to string, amount uint) (bool, error) {
+<pre><code class="language-go">func doTxnXfer(etcd *v3.Client, from, to string, amount uint) (bool, error) {
     // 一個查詢事務
     getresp, err := etcd.Txn(ctx.TODO()).Then(OpGet(from), OpGet(to)).Commit()
     if err != nil {
@@ -6946,11 +6946,11 @@ func main() {
 <p>因為事務使用起來非常麻煩，所以 etcd 又在這些基礎 API 上進行了封裝，新增了一種叫做 STM 的操作，提供了更加便利的方法。</p>
 <p>下面我們來看一看 STM 怎麼用。</p>
 <p>要使用 STM，你需要先編寫一個 apply 函數，這個函數的執行是在一個事務之中的：</p>
-<pre><code>apply func(STM) error
+<pre><code class="language-go">apply func(STM) error
 </code></pre>
 <p>這個方法包含一個 STM 類型的參數，它提供了對 key 值的讀寫操作。</p>
 <p>STM 提供了 4 個方法，分別是 Get、Put、Receive 和 Delete，代碼如下：</p>
-<pre><code>type STM interface {
+<pre><code class="language-go">type STM interface {
   Get(key ...string) string
   Put(key, val string, opts ...v3.OpOption)
   Rev(key string) int64
@@ -6961,7 +6961,7 @@ func main() {
 <p>STM 咋用呢？我們還是藉助一個例子來學習下。</p>
 <p>下面這個例子創建了 5 個銀行賬號，然後隨機選擇一些賬號兩兩轉賬。在轉賬的時候，要把源賬號一半的錢要轉給目標賬號。這個例子啟動了 10 個 goroutine 去執行這些事務，每個 goroutine 要完成 100 個事務。</p>
 <p>為了確認事務是否出錯了，我們最後要校驗每個賬號的錢數和總錢數。總錢數不變，就代表執行成功了。這個例子的代碼如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "context"

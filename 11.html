@@ -205,7 +205,7 @@
 <p>這個方法用於將一個元素返還給 Pool，Pool 會把這個元素保存到池中，並且可以複用。但如果 Put 一個 nil 值，Pool 就會忽略這個值。</p>
 <p>好了，瞭解了這幾個方法，下面我們看看 sync.Pool 最常用的一個場景：buffer 池（緩衝池）。</p>
 <p>因為 byte slice 是經常被創建銷燬的一類對象，使用 buffer 池可以緩存已經創建的 byte slice，比如，著名的靜態網站生成工具 Hugo 中，就包含這樣的實現bufpool，你可以看一下下面這段代碼：</p>
-<pre><code>var buffers = sync.Pool{
+<pre><code class="language-go">var buffers = sync.Pool{
   New: func() interface{} { 
     return new(bytes.Buffer)
   },
@@ -234,7 +234,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <p>每次垃圾回收的時候，Pool 會把 victim 中的對象移除，然後把 local 的數據給 victim，這樣的話，local 就會被清空，而 victim 就像一個垃圾分揀站，裡面的東西可能會被當做垃圾丟棄了，但是裡面有用的東西也可能被撿回來重新使用。</p>
 <p>victim 中的元素如果被 Get 取走，那麼這個元素就很幸運，因為它又“活”過來了。但是，如果這個時候 Get 的併發不是很大，元素沒有被 Get 取走，那麼就會被移除掉，因為沒有別人引用它的話，就會被垃圾回收掉。</p>
 <p>下面的代碼是垃圾回收時 sync.Pool 的處理邏輯：</p>
-<pre><code>func poolCleanup() {
+<pre><code class="language-go">func poolCleanup() {
     // 丟棄當前victim, STW所以不用加鎖
     for _, p := range oldPools {
         p.victim = nil
@@ -260,7 +260,7 @@ func PutBuffer(buf *bytes.Buffer) {
 </ol>
 <h3 id="get-方法"><a class="header" href="#get-方法">Get 方法</a></h3>
 <p>我們來看看 Get 方法的具體實現原理。</p>
-<pre><code>func (p *Pool) Get() interface{} {
+<pre><code class="language-go">func (p *Pool) Get() interface{} {
     // 把當前goroutine固定在當前的P上
     l, pid := p.pin()
     x := l.private // 優先從local的private字段取，快速
@@ -284,7 +284,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <p>這裡的重點是 getSlow 方法，我們來分析下。看名字也就知道了，它的耗時可能比較長。它首先要遍歷所有的 local，嘗試從它們的 shared 彈出一個元素。如果還沒找到一個，那麼，就開始對 victim 下手了。</p>
 <p>在 vintim 中查詢可用元素的邏輯還是一樣的，先從對應的 victim 的 private 查找，如果查不到，就再從其它 victim 的 shared 中查找。</p>
 <p>下面的代碼是 getSlow 方法的主要邏輯：</p>
-<pre><code>func (p *Pool) getSlow(pid int) interface{} {
+<pre><code class="language-go">func (p *Pool) getSlow(pid int) interface{} {
 
     size := atomic.LoadUintptr(&amp;p.localSize)
     locals := p.local                       
@@ -323,7 +323,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <p>這裡我沒列出 pin 代碼的實現，你只需要知道，pin 方法會將此 goroutine 固定在當前的 P 上，避免查找元素期間被其它的 P 執行。固定的好處就是查找元素期間直接得到跟這個 P 相關的 local。有一點需要注意的是，pin 方法在執行的時候，如果跟這個 P 相關的 local 還沒有創建，或者運行時 P 的數量被修改了的話，就會新創建 local。</p>
 <h3 id="put-方法"><a class="header" href="#put-方法">Put 方法</a></h3>
 <p>我們來看看 Put 方法的具體實現原理。</p>
-<pre><code>func (p *Pool) Put(x interface{}) {
+<pre><code class="language-go">func (p *Pool) Put(x interface{}) {
     if x == nil { // nil值直接丟棄
         return
     }
@@ -380,7 +380,7 @@ func PutBuffer(buf *bytes.Buffer) {
 <h2 id="tcp-連接池"><a class="header" href="#tcp-連接池">TCP 連接池</a></h2>
 <p>最常用的一個 TCP 連接池是 fatih 開發的fatih/pool，雖然這個項目已經被 fatih 歸檔（Archived），不再維護了，但是因為它相當穩定了，我們可以開箱即用。即使你有一些特殊的需求，也可以 fork 它，然後自己再做修改。</p>
 <p>它的使用套路如下：</p>
-<pre><code>// 工廠模式，提供創建連接的工廠方法
+<pre><code class="language-go">// 工廠模式，提供創建連接的工廠方法
 factory    := func() (net.Conn, error) { return net.Dial("tcp", "127.0.0.1:4000") }
 
 // 創建一個tcp池，提供初始容量和最大容量以及工廠方法
@@ -406,7 +406,7 @@ current := p.Len()
 </code></pre>
 <p>雖然我一直在說 TCP，但是它管理的是更通用的 net.Conn，不侷限於 TCP 連接。</p>
 <p>它通過把 net.Conn 包裝成 PoolConn，實現了攔截 net.Conn 的 Close 方法，避免了真正地關閉底層連接，而是把這個連接放回到池中：</p>
-<pre><code>    type PoolConn struct {
+<pre><code class="language-go">    type PoolConn struct {
     net.Conn
     mu       sync.RWMutex
     c        *channelPool
@@ -428,7 +428,7 @@ current := p.Len()
   }
 </code></pre>
 <p>它的 Pool 是通過 Channel 實現的，空閒的連接放入到 Channel 中，這也是 Channel 的一個應用場景：</p>
-<pre><code>    type channelPool struct {
+<pre><code class="language-go">    type channelPool struct {
     // 存儲連接池的channel
     mu    sync.RWMutex
     conns chan net.Conn
@@ -444,7 +444,7 @@ current := p.Len()
 <h2 id="memcached-client-連接池"><a class="header" href="#memcached-client-連接池">Memcached Client 連接池</a></h2>
 <p>Brad Fitzpatrick 是知名緩存庫 Memcached 的原作者，前 Go 團隊成員。gomemcache是他使用 Go 開發的 Memchaced 的客戶端，其中也用了連接池的方式池化 Memcached 的連接。接下來讓我們看看它的連接池的實現。</p>
 <p>gomemcache Client 有一個 freeconn 的字段，用來保存空閒的連接。當一個請求使用完之後，它會調用 putFreeConn 放回到池子中，請求的時候，調用 getFreeConn 優先查詢 freeConn 中是否有可用的連接。它採用 Mutex+Slice 實現 Pool：</p>
-<pre><code>   // 放回一個待重用的連接
+<pre><code class="language-go">   // 放回一個待重用的連接
    func (c *Client) putFreeConn(addr net.Addr, cn *conn) {
     c.lk.Lock()
     defer c.lk.Unlock()

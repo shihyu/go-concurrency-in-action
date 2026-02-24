@@ -190,7 +190,7 @@
 <p>在實際開發中，如果要更新配置數據，我們通常需要加鎖，這樣可以避免同時有多個 goroutine 併發修改數據。有的時候，我們也會使用 TryLock。這樣一來，當某個 goroutine 想要更改配置數據時，如果發現已經有 goroutine 在更改了，其他的 goroutine 調用 TryLock，返回了 false，這個 goroutine 就會放棄更改。</p>
 <p>很多語言（比如 Java）都為鎖提供了 TryLock 的方法，但是，Go 官方issue 6123有一個討論（後來一些 issue 中也提到過），標準庫的 Mutex 不會添加 TryLock 方法。雖然通過 Go 的 Channel 我們也可以實現 TryLock 的功能，但是基於 Channel 的實現我們會放在 Channel 那一講中去介紹，這一次我們還是基於 Mutex 去實現，畢竟大部分的程序員還是熟悉傳統的同步原語，而且傳統的同步原語也不容易出錯。所以這節課，還是希望帶你掌握基於 Mutex 實現的方法。</p>
 <p>那怎麼實現一個擴展 TryLock 方法的 Mutex 呢？我們直接來看代碼。</p>
-<pre><code>// 複製Mutex定義的常量
+<pre><code class="language-go">// 複製Mutex定義的常量
 const (
     mutexLocked = 1 &lt;&lt; iota // 加鎖標識位置
     mutexWoken              // 喚醒標識位置
@@ -226,7 +226,7 @@ func (m *Mutex) TryLock() bool {
 <p>如果沒有被持有，也沒有其它喚醒的 goroutine 來競爭鎖，鎖也不處於飢餓狀態，就嘗試獲取這把鎖（第 29 行），不論是否成功都將結果返回。因為，這個時候，可能還有其他的 goroutine 也在競爭這把鎖，所以，不能保證成功獲取這把鎖。</p>
 <p>我們可以寫一個簡單的測試程序，來測試我們的 TryLock 的機制是否工作。</p>
 <p>這個測試程序的工作機制是這樣子的：程序運行時會啟動一個 goroutine 持有這把我們自己實現的鎖，經過隨機的時間才釋放。主 goroutine 會嘗試獲取這把鎖。如果前一個 goroutine 一秒內釋放了這把鎖，那麼，主 goroutine 就有可能獲取到這把鎖了，輸出“got the lock”，否則沒有獲取到也不會被阻塞，會直接輸出“<code>can't get the lock</code>”。</p>
-<pre><code>func try() {
+<pre><code class="language-go">func try() {
     var mu Mutex
     go func() { // 啟動一個goroutine持有一段時間的鎖
         mu.Lock()
@@ -249,14 +249,14 @@ func (m *Mutex) TryLock() bool {
 }獲取等待者的數量等指標接下來，我想和你聊聊怎麼獲取等待者數量等指標。
 </code></pre>
 <p>第二講中，我們已經學習了 Mutex 的結構。先來回顧一下 Mutex 的數據結構，如下面的代碼所示。它包含兩個字段，state 和 sema。前四個字節（int32）就是 state 字段。</p>
-<pre><code>type Mutex struct {
+<pre><code class="language-go">type Mutex struct {
     state int32
     sema  uint32
 }
 </code></pre>
 <p>Mutex 結構中的 state 字段有很多個含義，通過 state 字段，你可以知道鎖是否已經被某個 goroutine 持有、當前是否處於飢餓狀態、是否有等待的 goroutine 被喚醒、等待者的數量等信息。但是，state 這個字段並沒有暴露出來，所以，我們需要想辦法獲取到這個字段，並進行解析。</p>
 <p>怎麼獲取未暴露的字段呢？很簡單，我們可以通過 unsafe 的方式實現。我來舉一個例子，你一看就明白了。</p>
-<pre><code>const (
+<pre><code class="language-go">const (
     mutexLocked = 1 &lt;&lt; iota // mutex is locked
     mutexWoken
     mutexStarving
@@ -277,7 +277,7 @@ func (m *Mutex) Count() int {
 </code></pre>
 <p>這個例子的第 14 行通過 unsafe 操作，我們可以得到 state 字段的值。第 15 行我們右移三位（這裡的常量 mutexWaiterShift 的值為 3），就得到了當前等待者的數量。如果當前的鎖已經被其他 goroutine 持有，那麼，我們就稍微調整一下這個值，加上一個 1（第 16 行），你基本上可以把它看作是當前持有和等待這把鎖的 goroutine 的總數。</p>
 <p>state 這個字段的第一位是用來標記鎖是否被持有，第二位用來標記是否已經喚醒了一個等待者，第三位標記鎖是否處於飢餓狀態，通過分析這個 state 字段我們就可以得到這些狀態信息。我們可以為這些狀態提供查詢的方法，這樣就可以即時地知道鎖的狀態了。</p>
-<pre><code>// 鎖是否被持有
+<pre><code class="language-go">// 鎖是否被持有
 func (m *Mutex) IsLocked() bool {
     state := atomic.LoadInt32((*int32)(unsafe.Pointer(&amp;m.Mutex)))
     return state&amp;mutexLocked == mutexLocked
@@ -296,7 +296,7 @@ func (m *Mutex) IsStarving() bool {
 }
 </code></pre>
 <p>我們可以寫一個程序測試一下，比如，在 1000 個 goroutine 併發訪問的情況下，我們可以把鎖的狀態信息輸出出來：</p>
-<pre><code>func count() {
+<pre><code class="language-go">func count() {
     var mu Mutex
     for i := 0; i &lt; 1000; i++ { // 啟動1000個goroutine
         go func() {
@@ -316,7 +316,7 @@ func (m *Mutex) IsStarving() bool {
 <p>最後，我們來討論一下，如何使用 Mutex 實現一個線程安全的隊列。</p>
 <p>為什麼要討論這個話題呢？因為 Mutex 經常會和其他非線程安全（對於 Go 來說，我們其實指的是 goroutine 安全）的數據結構一起，組合成一個線程安全的數據結構。新數據結構的業務邏輯由原來的數據結構提供，而 <strong>Mutex 提供了鎖的機制，<strong><strong>來</strong></strong>保證線程安全</strong>。</p>
 <p>比如隊列，我們可以通過 Slice 來實現，但是通過 Slice 實現的隊列不是線程安全的，出隊（Dequeue）和入隊（Enqueue）會有 data race 的問題。這個時候，Mutex 就要隆重出場了，通過它，我們可以在出隊和入隊的時候加上鎖的保護。</p>
-<pre><code>type SliceQueue struct {
+<pre><code class="language-go">type SliceQueue struct {
     data []interface{}
     mu   sync.Mutex
 }

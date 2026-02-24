@@ -202,7 +202,7 @@
 <p>在正式看 Mutex 用法之前呢，我想先給你交代一件事：Locker 接口。</p>
 <p>在 Go 的標準庫中，package sync 提供了鎖相關的一系列同步原語，這個 package 還定義了一個 Locker 的接口，Mutex 就實現了這個接口。</p>
 <p>Locker 的接口定義了鎖同步原語的方法集：</p>
-<pre><code>type Locker interface {
+<pre><code class="language-go">type Locker interface {
     Lock()
     Unlock()
 }
@@ -212,13 +212,13 @@
 <p>我們這一講介紹的 Mutex 以及後面會介紹的讀寫鎖 RWMutex 都實現了 Locker 接口，所以首先我把這個接口介紹了，讓你做到心中有數。</p>
 <p>下面我們直接看 Mutex。</p>
 <p>簡單來說，<strong>互斥鎖 Mutex 就提供兩個方法 Lock 和 Unlock：進入臨界區之前調用 Lock 方法，退出臨界區的時候調用 Unlock 方法</strong>：</p>
-<pre><code>  func(m *Mutex)Lock()
+<pre><code class="language-go">  func(m *Mutex)Lock()
   func(m *Mutex)Unlock()
 </code></pre>
 <p><strong>當一個 goroutine 通過調用 Lock 方法獲得了這個鎖的擁有權後， 其它請求鎖的 goroutine 就會阻塞在 Lock 方法的調用上，直到鎖被釋放並且自己獲取到了這個鎖的擁有權。</strong></p>
 <p>看到這兒，你可能會問，為啥一定要加鎖呢？別急，我帶你來看一個併發訪問場景中不使用鎖的例子，看看實現起來會出現什麼狀況。</p>
 <p>在這個例子中，我們創建了 10 個 goroutine，同時不斷地對一個變量（count）進行加 1 操作，每個 goroutine 負責執行 10 萬次的加 1 操作，我們期望的最後計數的結果是 10 * 100000 = 1000000 (一百萬)。</p>
-<pre><code> import (
+<pre><code class="language-go"> import (
         "fmt"
         "sync"
     )
@@ -248,7 +248,7 @@
 <p>這是為什麼呢？</p>
 <p>其實，這是因為，<strong>count++</strong> 不是一個原子操作，它至少包含幾個步驟，比如讀取變量 count 的當前值，對這個值加 1，把結果再保存到 count 中。因為不是原子操作，就可能有併發的問題。</p>
 <p>比如，10 個 goroutine 同時讀取到 count 的值為 9527，接著各自按照自己的邏輯加 1，值變成了 9528，然後把這個結果再寫回到 count 變量。但是，實際上，此時我們增加的總數應該是 10 才對，這裡卻只增加了 1，好多計數都被“吞”掉了。這是併發訪問共享數據的常見錯誤。</p>
-<pre><code> // count++操作的彙編代碼
+<pre><code class="language-go"> // count++操作的彙編代碼
     MOVQ    "".count(SB), AX
     LEAQ    1(AX), CX
     MOVQ    CX, "".count(SB)
@@ -264,7 +264,7 @@
 <p>例子中的 goroutine 10 對內存地址 0x00c000126010 有讀的操作（counter.go 文件第 16 行），同時，goroutine 7 對內存地址 0x00c000126010 有寫的操作（counter.go 文件第 16 行）。而且還可能有多個 goroutine 在同時進行讀寫，所以，警告信息可能會很長。</p>
 <p>雖然這個工具使用起來很方便，但是，因為它的實現方式，只能通過真正對實際地址進行讀寫訪問的時候才能探測，所以它並不能在編譯的時候發現 data race 的問題。而且，在運行的時候，只有在觸發了 data race 之後，才能檢測到，如果碰巧沒有觸發（比如一個 data race 問題只能在 2 月 14 號零點或者 11 月 11 號零點才出現），是檢測不出來的。</p>
 <p>而且，把開啟了 race 的程序部署在線上，還是比較影響性能的。運行 go tool compile -race -S counter.go，可以查看計數器例子的代碼，重點關注一下 count++ 前後的編譯後的代碼：</p>
-<pre><code>0x002a 00042 (counter.go:13)    CALL    runtime.racefuncenter(SB)
+<pre><code class="language-go">0x002a 00042 (counter.go:13)    CALL    runtime.racefuncenter(SB)
        ......
         0x0061 00097 (counter.go:14)    JMP     173
         0x0063 00099 (counter.go:15)    MOVQ    AX, "".j+8(SP)
@@ -292,7 +292,7 @@
 <p>既然這個例子存在 data race 問題，我們就要想辦法來解決它。這個時候，我們這節課的主角 Mutex 就要登場了，它可以輕鬆地消除掉 data race。</p>
 <p>具體怎麼做呢？下面，我就結合這個例子，來具體給你講一講 Mutex 的基本用法。</p>
 <p>我們知道，這裡的共享資源是 count 變量，臨界區是 count++，只要在臨界區前面獲取鎖，在離開臨界區的時候釋放鎖，就能完美地解決 data race 的問題了。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
     import (
         "fmt"
@@ -331,14 +331,14 @@
 <p>這裡有一點需要注意：Mutex 的零值是還沒有 goroutine 等待的未加鎖的狀態，所以你不需要額外的初始化，直接聲明變量（如 var mu sync.Mutex）即可。</p>
 <p>那 Mutex 還有哪些用法呢？</p>
 <p>很多情況下，<strong>Mutex 會嵌入到其它 struct 中使用</strong>，比如下面的方式：</p>
-<pre><code>type Counter struct {
+<pre><code class="language-go">type Counter struct {
     mu    sync.Mutex
     Count uint64
 }
 </code></pre>
 <p>在初始化嵌入的 struct 時，也不必初始化這個 Mutex 字段，不會因為沒有初始化出現空指針或者是無法獲取到鎖的情況。</p>
 <p>有時候，我們還可以<strong>採用嵌入字段的方式</strong>。通過嵌入字段，你可以在這個 struct 上直接調用 Lock/Unlock 方法。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var counter Counter
     var wg sync.WaitGroup
     wg.Add(10)
@@ -363,7 +363,7 @@ type Counter struct {
 </code></pre>
 <p>**如果嵌入的 struct 有多個字段，我們一般會把 Mutex 放在要控制的字段上面，然後使用空格把字段分隔開來。**即使你不這樣做，代碼也可以正常編譯，只不過，用這種風格去寫的話，邏輯會更清晰，也更易於維護。</p>
 <p>甚至，你還可以<strong>把獲取鎖、釋放鎖、計數加一的邏輯封裝成一個方法</strong>，對外不需要暴露鎖等邏輯：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     // 封裝好的計數器
     var counter Counter
 

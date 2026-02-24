@@ -189,7 +189,7 @@
 <h2 id="pv-操作"><a class="header" href="#pv-操作">P/V 操作</a></h2>
 <p>Dijkstra 在他的論文中為信號量定義了兩個操作 P 和 V。P 操作（descrease、wait、acquire）是減少信號量的計數值，而 V 操作（increase、signal、release）是增加信號量的計數值。</p>
 <p>使用偽代碼表示如下（中括號代表原子操作）：</p>
-<pre><code>function V(semaphore S, integer I):
+<pre><code class="language-go">function V(semaphore S, integer I):
     [S ← S + I]
 
 function P(semaphore S, integer I):
@@ -214,13 +214,13 @@ function P(semaphore S, integer I):
 <p>好了，言歸正傳，剛剛我們掌握了信號量的含義和具體操作方式，下面，我們就來具體瞭解下官方擴展庫的實現。</p>
 <h1 id="go-官方擴展庫的實現"><a class="header" href="#go-官方擴展庫的實現">Go 官方擴展庫的實現</a></h1>
 <p>在運行時，Go 內部使用信號量來控制 goroutine 的阻塞和喚醒。我們在學習基本併發原語的實現時也看到了，比如互斥鎖的第二個字段：</p>
-<pre><code>type Mutex struct {
+<pre><code class="language-go">type Mutex struct {
     state int32
     sema  uint32
 }
 </code></pre>
 <p>信號量的 P/V 操作是通過函數實現的：</p>
-<pre><code>func runtime_Semacquire(s *uint32)
+<pre><code class="language-go">func runtime_Semacquire(s *uint32)
 func runtime_SemacquireMutex(s *uint32, lifo bool, skipframes int)
 func runtime_Semrelease(s *uint32, handoff bool, skipframes int)
 </code></pre>
@@ -236,7 +236,7 @@ func runtime_Semrelease(s *uint32, handoff bool, skipframes int)
 <p>知道了信號量的實現方法，在實際的場景中，我們應該怎麼用呢？我來舉個 Worker Pool 的例子，來幫助你理解。</p>
 <p>我們創建和 CPU 核數一樣多的 Worker，讓它們去處理一個 4 倍數量的整數 slice。每個 Worker 一次只能處理一個整數，處理完之後，才能處理下一個。</p>
 <p>當然，這個問題的解決方案有很多種，這一次我們使用信號量，代碼如下：</p>
-<pre><code>var (
+<pre><code class="language-go">var (
     maxWorkers = runtime.GOMAXPROCS(0)                    // worker數量
     sema       = semaphore.NewWeighted(int64(maxWorkers)) //信號量
     task       = make([]int, maxWorkers*4)                // 任務數，是worker的四倍
@@ -271,7 +271,7 @@ func main() {
 <p>需要提醒你的是，其實，在這個例子中，還有一個值得我們學習的知識點，就是最後的那一段處理（第 25 行）。<strong>如果在實際應用中，你想等所有的 Worker 都執行完，就可以獲取最大計數值的信號量</strong>。</p>
 <p>Go 擴展庫中的信號量是使用互斥鎖 +List 實現的。互斥鎖實現其它字段的保護，而 List 實現了一個等待隊列，等待者的通知是通過 Channel 的通知機制實現的。</p>
 <p>我們來看一下信號量 Weighted 的數據結構：</p>
-<pre><code>type Weighted struct {
+<pre><code class="language-go">type Weighted struct {
     size    int64         // 最大資源數
     cur     int64         // 當前已被使用的資源
     mu      sync.Mutex    // 互斥鎖，對字段的保護
@@ -279,7 +279,7 @@ func main() {
 }
 </code></pre>
 <p>在信號量的幾個實現方法裡，Acquire 是代碼最複雜的一個方法，它不僅僅要監控資源是否可用，而且還要檢測 Context 的 Done 是否已關閉。我們來看下它的實現代碼。</p>
-<pre><code>func (s *Weighted) Acquire(ctx context.Context, n int64) error {
+<pre><code class="language-go">func (s *Weighted) Acquire(ctx context.Context, n int64) error {
     s.mu.Lock()
         // fast path, 如果有足夠的資源，都不考慮ctx.Done的狀態，將cur加上n就返回
     if s.size-s.cur &gt;= n &amp;&amp; s.waiters.Len() == 0 {
@@ -329,7 +329,7 @@ func main() {
 </code></pre>
 <p>其實，為了提高性能，這個方法中的 fast path 之外的代碼，可以抽取成 acquireSlow 方法，以便其它 Acquire 被內聯。</p>
 <p>Release 方法將當前計數值減去釋放的資源數 n，並喚醒等待隊列中的調用者，看是否有足夠的資源被獲取。</p>
-<pre><code>func (s *Weighted) Release(n int64) {
+<pre><code class="language-go">func (s *Weighted) Release(n int64) {
     s.mu.Lock()
     s.cur -= n
     if s.cur &lt; 0 {
@@ -341,7 +341,7 @@ func main() {
 }
 </code></pre>
 <p>notifyWaiters 方法就是逐個檢查等待的調用者，如果資源不夠，或者是沒有等待者了，就返回：</p>
-<pre><code>func (s *Weighted) notifyWaiters() {
+<pre><code class="language-go">func (s *Weighted) notifyWaiters() {
     for {
       next := s.waiters.Front()
       if next == nil {
@@ -379,7 +379,7 @@ func main() {
 <p>除了官方擴展庫的實現，實際上，我們還有很多方法實現信號量，比較典型的就是使用 Channel 來實現。</p>
 <p>根據之前的 Channel 類型的介紹以及 Go 內存模型的定義，你應該能想到，使用一個 buffer 為 n 的 Channel 很容易實現信號量，比如下面的代碼，我們就是使用 chan struct{}類型來實現的。</p>
 <p>在初始化這個信號量的時候，我們設置它的初始容量，代表有多少個資源可以使用。它使用 Lock 和 Unlock 方法實現請求資源和釋放資源，正好實現了 Locker 接口。</p>
-<pre><code>  // Semaphore 數據結構，並且還實現了Locker接口
+<pre><code class="language-go">  // Semaphore 數據結構，並且還實現了Locker接口
   type semaphore struct {
     sync.Locker
     ch chan struct{}

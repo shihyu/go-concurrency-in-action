@@ -185,10 +185,10 @@
 <p>etcd 集群的可用性由 etcd 集群的維護者來保證，我們不用擔心網絡分區、節點宕機等問題。我們可以把這些通通交給 etcd 的運維人員，把我們自己的關注點放在使用上。</p>
 <p>下面，我們就來了解下 etcd 提供的分佈式隊列。etcd 通過 github.com/coreos/etcd/contrib/recipes 包提供了分佈式隊列這種數據結構。</p>
 <p>創建分佈式隊列的方法非常簡單，只有一個，即 NewQueue，你只需要傳入 etcd 的 client 和這個隊列的名字，就可以了。代碼如下：</p>
-<pre><code>func NewQueue(client *v3.Client, keyPrefix string) *Queue
+<pre><code class="language-go">func NewQueue(client *v3.Client, keyPrefix string) *Queue
 </code></pre>
 <p><strong>這個隊列只有兩個方法，分別是出隊和入隊，隊列中的元素是字符串類型</strong>。這兩個方法的簽名如下所示：</p>
-<pre><code>// 入隊
+<pre><code class="language-go">// 入隊
 func (q *Queue) Enqueue(val string) error
 //出隊
 func (q *Queue) Dequeue() (string, error)
@@ -198,7 +198,7 @@ func (q *Queue) Dequeue() (string, error)
 <p>在我接下來講的例子中，你就可以啟動兩個節點，一個節點往隊列中放入元素，一個節點從隊列中取出元素，看看是否能正常取出來。etcd 的分佈式隊列是一種多讀多寫的隊列，所以，你也可以啟動多個寫節點和多個讀節點。</p>
 <p>下面我們來藉助代碼，看一下如何實現分佈式隊列。</p>
 <p>首先，我們啟動一個程序，它會從命令行讀取你的命令，然後執行。你可以輸入<code>push &lt;value&gt;</code>，將一個元素入隊，輸入<code>pop</code>，將一個元素彈出。另外，你還可以使用這個程序啟動多個實例，用來模擬分佈式的環境：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -263,7 +263,7 @@ func main() {
 <p>除了剛剛說的分佈式隊列，etcd 還提供了優先級隊列（PriorityQueue）。</p>
 <p>它的用法和隊列類似，也提供了出隊和入隊的操作，只不過，在入隊的時候，除了需要把一個值加入到隊列，我們還需要提供 uint16 類型的一個整數，作為此值的優先級，優先級高的元素會優先出隊。</p>
 <p>優先級隊列的測試程序如下，你可以在一個節點輸入一些不同優先級的元素，在另外一個節點讀取出來，看看它們是不是按照優先級順序彈出的：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -343,10 +343,10 @@ func main() {
 <h2 id="barrier分佈式柵欄"><a class="header" href="#barrier分佈式柵欄">Barrier：分佈式柵欄</a></h2>
 <p>我們先來學習下分佈式 Barrier。</p>
 <p>分佈式 Barrier 的創建很簡單，你只需要提供 etcd 的 Client 和 Barrier 的名字就可以了，如下所示：</p>
-<pre><code>func NewBarrier(client *v3.Client, key string) *Barrier
+<pre><code class="language-go">func NewBarrier(client *v3.Client, key string) *Barrier
 </code></pre>
 <p>Barrier 提供了三個方法，分別是 Hold、**Release 和 Wait，**代碼如下：</p>
-<pre><code>func (b *Barrier) Hold() error
+<pre><code class="language-go">func (b *Barrier) Hold() error
 func (b *Barrier) Release() error
 func (b *Barrier) Wait() error
 </code></pre>
@@ -357,7 +357,7 @@ func (b *Barrier) Wait() error
 </ol>
 <p><strong>學習併發原語最好的方式就是使用它</strong>。下面我們就來藉助一個例子，來看看 Barrier 該怎麼用。</p>
 <p>你可以在一個終端中運行這個程序，執行"hold""release"命令，模擬柵欄的持有和釋放。在另外一個終端中運行這個程序，不斷調用"wait"方法，看看是否能正常地跳出阻塞繼續執行：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -418,14 +418,14 @@ func main() {
 func NewDoubleBarrier(s *concurrency.Session, key string, count int) *DoubleBarrier
 </code></pre>
 <p>同時，它還提供了兩個方法，分別是 Enter 和 Leave，代碼如下：</p>
-<pre><code>func (b *DoubleBarrier) Enter() error
+<pre><code class="language-go">func (b *DoubleBarrier) Enter() error
 func (b *DoubleBarrier) Leave() error
 </code></pre>
 <p>我來解釋下這兩個方法的作用。</p>
 <p>當調用者調用 Enter 時，會被阻塞住，直到一共有 count（初始化這個柵欄的時候設定的值）個節點調用了 Enter，這 count 個被阻塞的節點才能繼續執行。所以，你可以利用它編排一組節點，讓這些節點在同一個時刻開始執行任務。</p>
 <p>同理，如果你想讓一組節點在同一個時刻完成任務，就可以調用 Leave 方法。節點調用 Leave 方法的時候，會被阻塞，直到有 count 個節點，都調用了 Leave 方法，這些節點才能繼續執行。</p>
 <p>我們再來看一下 DoubleBarrier 的使用例子。你可以起兩個節點，同時執行 Enter 方法，看看這兩個節點是不是先阻塞，之後才繼續執行。然後，你再執行 Leave 方法，也觀察一下，是不是先阻塞又繼續執行的。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"
@@ -494,10 +494,10 @@ func main() {
 <p>在學習 STM 之前，我們要先了解一下 etcd 的事務以及它的問題。</p>
 <p>etcd 提供了在一個事務中對多個 key 的更新功能，這一組 key 的操作要麼全部成功，要麼全部失敗。etcd 的事務實現方式是基於 CAS 方式實現的，融合了 Get、Put 和 Delete 操作。</p>
 <p>etcd 的事務操作如下，分為條件塊、成功塊和失敗塊，條件塊用來檢測事務是否成功，如果成功，就執行 Then(...)，如果失敗，就執行 Else(...)：</p>
-<pre><code>Txn().If(cond1, cond2, ...).Then(op1, op2, ...,).Else(op1’, op2’, …)
+<pre><code class="language-go">Txn().If(cond1, cond2, ...).Then(op1, op2, ...,).Else(op1’, op2’, …)
 </code></pre>
 <p>我們來看一個利用 etcd 的事務實現轉賬的小例子。我們從賬戶 from 向賬戶 to 轉賬 amount，代碼如下：</p>
-<pre><code>func doTxnXfer(etcd *v3.Client, from, to string, amount uint) (bool, error) {
+<pre><code class="language-go">func doTxnXfer(etcd *v3.Client, from, to string, amount uint) (bool, error) {
     // 一個查詢事務
     getresp, err := etcd.Txn(ctx.TODO()).Then(OpGet(from), OpGet(to)).Commit()
     if err != nil {
@@ -532,11 +532,11 @@ func main() {
 <p>因為事務使用起來非常麻煩，所以 etcd 又在這些基礎 API 上進行了封裝，新增了一種叫做 STM 的操作，提供了更加便利的方法。</p>
 <p>下面我們來看一看 STM 怎麼用。</p>
 <p>要使用 STM，你需要先編寫一個 apply 函數，這個函數的執行是在一個事務之中的：</p>
-<pre><code>apply func(STM) error
+<pre><code class="language-go">apply func(STM) error
 </code></pre>
 <p>這個方法包含一個 STM 類型的參數，它提供了對 key 值的讀寫操作。</p>
 <p>STM 提供了 4 個方法，分別是 Get、Put、Receive 和 Delete，代碼如下：</p>
-<pre><code>type STM interface {
+<pre><code class="language-go">type STM interface {
   Get(key ...string) string
   Put(key, val string, opts ...v3.OpOption)
   Rev(key string) int64
@@ -547,7 +547,7 @@ func main() {
 <p>STM 咋用呢？我們還是藉助一個例子來學習下。</p>
 <p>下面這個例子創建了 5 個銀行賬號，然後隨機選擇一些賬號兩兩轉賬。在轉賬的時候，要把源賬號一半的錢要轉給目標賬號。這個例子啟動了 10 個 goroutine 去執行這些事務，每個 goroutine 要完成 100 個事務。</p>
 <p>為了確認事務是否出錯了，我們最後要校驗每個賬號的錢數和總錢數。總錢數不變，就代表執行成功了。這個例子的代碼如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "context"

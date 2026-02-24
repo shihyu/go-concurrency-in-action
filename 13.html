@@ -189,7 +189,7 @@
 <p>由於 cache 的存在，單個核上的單個指令進行原子操作的時候，你要確保其它處理器或者核不訪問此原子操作的地址，或者是確保其它處理器或者核總是訪問原子操作之後的最新的值。x86 架構中提供了指令前綴 LOCK，LOCK 保證了指令（比如 LOCK CMPXCHG op1、op2）不會受其它處理器或 CPU 核的影響，有些指令（比如 XCHG）本身就提供 Lock 的機制。不同的 CPU 架構提供的原子操作指令的方式也是不同的，比如對於多核的 MIPS 和 ARM，提供了 LL/SC（Load Link/Store Conditional）指令，可以幫助實現原子操作（ARMLL/SC 指令 LDREX 和 STREX）。</p>
 <p><strong>因為不同的 CPU 架構甚至不同的版本提供的原子操作的指令是不同的，所以，要用一種編程語言實現支持不同架構的原子操作是相當有難度的</strong>。不過，還好這些都不需要你操心，因為 Go 提供了一個通用的原子操作的 API，將更底層的不同的架構下的實現封裝成 atomic 包，提供了修改類型的原子操作（atomic read-modify-write，RMW）和加載存儲類型的原子操作（Load 和 Store）的 API，稍後我會一一介紹。</p>
 <p>有的代碼也會因為架構的不同而不同。有時看起來貌似一個操作是原子操作，但實際上，對於不同的架構來說，情況是不一樣的。比如下面的代碼的第 4 行，是將一個 64 位的值賦值給變量 i：</p>
-<pre><code>const x int64 = 1 + 1&lt;&lt;33
+<pre><code class="language-go">const x int64 = 1 + 1&lt;&lt;33
 
 func main() {
     var i = x
@@ -225,21 +225,21 @@ func main() {
 <p>其實，Add 方法就是給第一個參數地址中的值增加一個 delta 值。</p>
 <p>對於有符號的整數來說，delta 可以是一個負數，相當於減去一個值。對於無符號的整數和 uinptr 類型來說，怎麼實現減去一個值呢？畢竟，atomic 並沒有提供單獨的減法操作。</p>
 <p>我來跟你說一種方法。你可以利用計算機補碼的規則，把減法變成加法。以 uint32 類型為例：</p>
-<pre><code>AddUint32(&amp;x, ^uint32(c-1)).
+<pre><code class="language-go">AddUint32(&amp;x, ^uint32(c-1)).
 </code></pre>
 <p>如果是對 uint64 的值進行操作，那麼，就把上面的代碼中的 uint32 替換成 uint64。</p>
 <p>尤其是減 1 這種特殊的操作，我們可以簡化為：</p>
-<pre><code>AddUint32(&amp;x, ^uint32(0))
+<pre><code class="language-go">AddUint32(&amp;x, ^uint32(0))
 </code></pre>
 <p>好了，我們再來看看 CAS 方法。</p>
 <h2 id="cas-compareandswap"><a class="header" href="#cas-compareandswap">CAS （CompareAndSwap）</a></h2>
 <p>以 int32 為例，我們學習一下 CAS 提供的功能。在 CAS 的方法簽名中，需要提供要操作的地址、原數據值、新值，如下所示：</p>
-<pre><code>func CompareAndSwapInt32(addr *int32, old, new int32) (swapped bool)
+<pre><code class="language-go">func CompareAndSwapInt32(addr *int32, old, new int32) (swapped bool)
 </code></pre>
 <p>我們來看下這個方法的功能。</p>
 <p>這個方法會比較當前 addr 地址裡的值是不是 old，如果不等於 old，就返回 false；如果等於 old，就把此地址的值替換成 new 值，返回 true。這就相當於“判斷相等才替換”。</p>
 <p>如果使用偽代碼來表示這個原子操作，代碼如下：</p>
-<pre><code>if *addr == old {
+<pre><code class="language-go">if *addr == old {
   *addr = new
   return true
 }
@@ -249,7 +249,7 @@ return false
 <p><img src="./images/de6d354f350b6eb983dcc3f17b87bbb4.png" alt="" /></p>
 <h2 id="swap"><a class="header" href="#swap">Swap</a></h2>
 <p>如果不需要比較舊值，只是比較粗暴地替換的話，就可以使用 Swap 方法，它替換後還可以返回舊值，偽代碼如下：</p>
-<pre><code>old = *addr
+<pre><code class="language-go">old = *addr
 *addr = new
 return old
 </code></pre>
@@ -270,7 +270,7 @@ return old
 <p>首先，我們啟動一個 goroutine，然後讓它隨機 sleep 一段時間，之後就變更一下配置，並通過我們前面學到的 Cond 併發原語，通知其它的 reader 去加載新的配置。</p>
 <p>接下來，我們啟動一個 goroutine 等待配置變更的信號，一旦有變更，它就會加載最新的配置。</p>
 <p>通過這個例子，你可以瞭解到 Value 的 Store/Load 方法的使用，因為它只有這兩個方法，只要掌握了它們的使用，你就完全掌握了 Value 類型。</p>
-<pre><code>type Config struct {
+<pre><code class="language-go">type Config struct {
     NodeName string
     Addr     string
     Count    int32
@@ -316,13 +316,13 @@ func main() {
 <p>不過有一點讓人覺得不爽的是，或者是讓熟悉面向對象編程的程序員不爽的是，函數調用有一點點麻煩。所以，有些人就對這些函數做了進一步的包裝，跟 atomic 中的 Value 類型類似，這些類型也提供了面向對象的使用方式，比如關注度比較高的uber-go/atomic，它定義和封裝了幾種與常見類型相對應的原子操作類型，這些類型提供了原子操作的方法。這些類型包括 Bool、Duration、Error、Float64、Int32、Int64、String、Uint32、Uint64 等。</p>
 <p>比如 Bool 類型，提供了 CAS、Store、Swap、Toggle 等原子方法，還提供 String、MarshalJSON、UnmarshalJSON 等輔助方法，確實是一個精心設計的 atomic 擴展庫。關於這些方法，你一看名字就能猜出來它們的功能，我就不多說了。</p>
 <p>其它的數據類型也和 Bool 類型相似，使用起來就像面向對象的編程一樣，你可以看下下面的這段代碼。</p>
-<pre><code>    var running atomic.Bool
+<pre><code class="language-go">    var running atomic.Bool
     running.Store(true)
     running.Toggle()
     fmt.Println(running.Load()) // false使用 atomic 實現 Lock-Free queueatomic 常常用來實現 Lock-Free 的數據結構，這次我會給你展示一個 Lock-Free queue 的實現。
 </code></pre>
 <p>Lock-Free queue 最出名的就是 Maged M. Michael 和 Michael L. Scott 1996 年發表的論文中的算法，算法比較簡單，容易實現，偽代碼的每一行都提供了註釋，我就不在這裡貼出偽代碼了，因為我們使用 Go 實現這個數據結構的代碼幾乎和偽代碼一樣：</p>
-<pre><code>package queue
+<pre><code class="language-go">package queue
 import (
   "sync/atomic"
   "unsafe"

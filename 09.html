@@ -180,14 +180,14 @@
 <p>這一講我來講一個簡單的併發原語：Once。為什麼要學習 Once 呢？我先給你答案：<strong>Once 可以用來執行且僅僅執行一次動作，常常用於單例對象的初始化場景。</strong></p>
 <p>那這節課，我們就從對單例對象進行初始化這件事兒說起。</p>
 <p>初始化單例資源有很多方法，比如定義 package 級別的變量，這樣程序在啟動的時候就可以初始化：</p>
-<pre><code>package abc
+<pre><code class="language-go">package abc
 
 import time
 
 var startTime = time.Now()
 </code></pre>
 <p>或者在 init 函數中進行初始化：</p>
-<pre><code>package abc
+<pre><code class="language-go">package abc
 
 var startTime time.Time
 
@@ -196,7 +196,7 @@ func init() {
 }
 </code></pre>
 <p>又或者在 main 函數開始執行的時候，執行一個初始化的函數：</p>
-<pre><code>package abc
+<pre><code class="language-go">package abc
 
 var startTime time.Tim
 
@@ -209,7 +209,7 @@ func main() {
 </code></pre>
 <p>這三種方法都是線程安全的，並且後兩種方法還可以根據傳入的參數實現定製化的初始化操作。</p>
 <p>但是很多時候我們是要延遲進行初始化的，所以有時候單例資源的初始化，我們會使用下面的方法：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "net"
@@ -247,10 +247,10 @@ func main() {
 <p>這個時候就可以使用這一講要介紹的 Once 併發原語了。接下來我會詳細介紹 Once 的使用、實現和易錯場景。</p>
 <h1 id="once-的使用場景"><a class="header" href="#once-的使用場景">Once 的使用場景</a></h1>
 <p><strong>sync.Once 只暴露了一個方法 Do，你可以多次調用 Do 方法，但是隻有第一次調用 Do 方法時 f 參數才會執行，這裡的 f 是一個無參數無返回值的函數。</strong></p>
-<pre><code>func (o *Once) Do(f func())
+<pre><code class="language-go">func (o *Once) Do(f func())
 </code></pre>
 <p>因為當且僅當第一次調用 Do 方法的時候參數 f 才會執行，即使第二次、第三次、第 n 次調用時 f 參數的值不一樣，也不會被執行，比如下面的例子，雖然 f1 和 f2 是不同的函數，但是第二個函數 f2 就不會執行。</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "fmt"
@@ -274,7 +274,7 @@ func main() {
 }
 </code></pre>
 <p>因為這裡的 f 參數是一個無參數無返回的函數，所以你可能會通過閉包的方式引用外面的參數，比如：</p>
-<pre><code>    var addr = "baidu.com"
+<pre><code class="language-go">    var addr = "baidu.com"
 
     var conn net.Conn
     var err error
@@ -286,7 +286,7 @@ func main() {
 <p>而且在實際的使用中，絕大多數情況下，你會使用閉包的方式去初始化外部的一個資源。</p>
 <p>你看，Once 的使用場景很明確，所以，在標準庫內部實現中也常常能看到 Once 的身影。</p>
 <p>比如標準庫內部cache的實現上，就使用了 Once 初始化 Cache 資源，包括 defaultDir 值的獲取：</p>
-<pre><code>    func Default() *Cache { // 獲取默認的Cache
+<pre><code class="language-go">    func Default() *Cache { // 獲取默認的Cache
     defaultOnce.Do(initDefaultCache) // 初始化cache
     return defaultCache
   }
@@ -310,7 +310,7 @@ func main() {
   )
 </code></pre>
 <p>還有一些測試的時候初始化測試的資源（export_windows_test）：</p>
-<pre><code>    // 測試window系統調用時區相關函數
+<pre><code class="language-go">    // 測試window系統調用時區相關函數
     func ForceAusFromTZIForTesting() {
     ResetLocalOnceForTest()
         // 使用Once執行一次初始化
@@ -318,7 +318,7 @@ func main() {
   }
 </code></pre>
 <p>除此之外，還有保證只調用一次 copyenv 的 envOnce，strings 包下的 Replacer，time 包中的測試，Go 拉取庫時的proxy，net.pipe，crc64，Regexp，…，數不勝數。我給你重點介紹一下很值得我們學習的 math/big/sqrt.go 中實現的一個數據結構，它通過 Once 封裝了一個只初始化一次的值：</p>
-<pre><code>   // 值是3.0或者0.0的一個數據結構
+<pre><code class="language-go">   // 值是3.0或者0.0的一個數據結構
    var threeOnce struct {
     sync.Once
     v *Float
@@ -338,7 +338,7 @@ func main() {
 <p>瞭解了 Once 的使用場景，那應該怎樣實現一個 Once 呢？</p>
 <h1 id="如何實現一個-once"><a class="header" href="#如何實現一個-once">如何實現一個 Once？</a></h1>
 <p>很多人認為實現一個 Once 一樣的併發原語很簡單，只需使用一個 flag 標記是否初始化過即可，最多是用 atomic 原子操作這個 flag，比如下面的實現：</p>
-<pre><code>type Once struct {
+<pre><code class="language-go">type Once struct {
     done uint32
 }
 
@@ -353,7 +353,7 @@ func (o *Once) Do(f func()) {
 <p>所以，<strong>一個正確的 Once 實現要使用一個互斥鎖，<strong><strong>這樣初始化的時候如果有併發的 goroutine，就會進入</strong></strong>doSlow 方法</strong>。互斥鎖的機制保證只有一個 goroutine 進行初始化，同時利用<strong>雙檢查的機制</strong>（double-checking），再次判斷 o.done 是否為 0，如果為 0，則是第一次執行，執行完畢後，就將 o.done 設置為 1，然後釋放鎖。</p>
 <p>即使此時有多個 goroutine 同時進入了 doSlow 方法，因為雙檢查的機制，後續的 goroutine 會看到 o.done 的值為 1，也不會再次執行 f。</p>
 <p>這樣既保證了併發的 goroutine 會等待 f 完成，而且還不會多次執行 f。</p>
-<pre><code>type Once struct {
+<pre><code class="language-go">type Once struct {
     done uint32
     m    Mutex
 }
@@ -378,7 +378,7 @@ func (o *Once) doSlow(f func()) {
 <h1 id="使用-once-可能出現的-2-種錯誤"><a class="header" href="#使用-once-可能出現的-2-種錯誤">使用 Once 可能出現的 2 種錯誤</a></h1>
 <h2 id="第一種錯誤死鎖"><a class="header" href="#第一種錯誤死鎖">第一種錯誤：死鎖</a></h2>
 <p>你已經知道了 Do 方法會執行一次 f，但是如果 f 中再次調用這個 Once 的 Do 方法的話，就會導致死鎖的情況出現。這還不是無限遞歸的情況，而是的的確確的 Lock 的遞歸調用導致的死鎖。</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var once sync.Once
     once.Do(func() {
         once.Do(func() {
@@ -391,7 +391,7 @@ func (o *Once) doSlow(f func()) {
 <h2 id="第二種錯誤未初始化"><a class="header" href="#第二種錯誤未初始化">第二種錯誤：未初始化</a></h2>
 <p>如果 f 方法執行的時候 panic，或者 f 執行初始化資源的時候失敗了，這個時候，Once 還是會認為初次執行已經成功了，即使再次調用 Do 方法，也不會再次執行 f。</p>
 <p>比如下面的例子，由於一些防火牆的原因，googleConn 並沒有被正確的初始化，後面如果想當然認為既然執行了 Do 方法 googleConn 就已經初始化的話，會拋出空指針的錯誤：</p>
-<pre><code>func main() {
+<pre><code class="language-go">func main() {
     var once sync.Once
     var googleConn net.Conn // 到Google網站的一個連接
 
@@ -406,7 +406,7 @@ func (o *Once) doSlow(f func()) {
 </code></pre>
 <p>既然執行過 Once.Do 方法也可能因為函數執行失敗的原因未初始化資源，並且以後也沒機會再次初始化資源，那麼這種初始化未完成的問題該怎麼解決呢？</p>
 <p>這裡我來告訴你一招獨家秘笈，我們可以<strong>自己實現一個類似 Once 的併發原語</strong>，既可以返回當前調用 Do 方法是否正確完成，還可以在初始化失敗後調用 Do 方法再次嘗試初始化，直到初始化成功才不再初始化了。</p>
-<pre><code>// 一個功能更加強大的Once
+<pre><code class="language-go">// 一個功能更加強大的Once
 type Once struct {
     m    sync.Mutex
     done uint32
@@ -437,7 +437,7 @@ func (o *Once) slowDo(f func() error) error {
 <p>對 slowDo 方法也做了調整，如果 f 調用失敗，我們不會更改 done 字段的值，這樣後續 degoroutine 還會繼續調用 f。如果 f 執行成功，才會修改 done 的值為 1。</p>
 <p>可以說，真是一頓操作猛如虎，我們使用 Once 有點得心應手的感覺了。等等，還有個問題，我們怎麼查詢是否初始化過呢？</p>
 <p>目前的 Once 實現可以保證你調用任意次數的 once.Do 方法，它只會執行這個方法一次。但是，有時候我們需要打一個標記。如果初始化後我們就去執行其它的操作，標準庫的 Once 並不會告訴你是否初始化完成了，只是讓你放心大膽地去執行 Do 方法，所以，<strong>你還需要一個輔助變量，自己去檢查是否初始化過了</strong>，比如通過下面的代碼中的 inited 字段：</p>
-<pre><code>type AnimalStore struct {once   sync.Once;inited uint32}
+<pre><code class="language-go">type AnimalStore struct {once   sync.Once;inited uint32}
 func (a *AnimalStore) Init() // 可以被併發調用
   a.once.Do(func() {
     longOperationSetupDbOpenFilesQueuesEtc()
@@ -452,7 +452,7 @@ func (a *AnimalStore) CountOfCats() (int, error) { // 另外一個goroutine
 }
 </code></pre>
 <p>當然，通過這段代碼，我們可以解決這類問題，但是，如果官方的 Once 類型有 Done 這樣一個方法的話，我們就可以直接使用了。這是有人在 Go 代碼庫中提出的一個 issue(#41690)。對於這類問題，一般都會被建議採用其它類型，或者自己去擴展。我們可以嘗試擴展這個併發原語：</p>
-<pre><code>// Once 是一個擴展的sync.Once類型，提供了一個Done方法
+<pre><code class="language-go">// Once 是一個擴展的sync.Once類型，提供了一個Done方法
 type Once struct {
     sync.Once
 }
@@ -480,7 +480,7 @@ func main() {
 <p>所以查看大部分的 Go 項目，幾乎找不到 Once 的錯誤使用場景，不過我還是發現了一個。這個 issue 先從另外一個需求 (go#25955) 談起。</p>
 <h1 id="once-的踩坑案例"><a class="header" href="#once-的踩坑案例">Once 的踩坑案例</a></h1>
 <p>go#25955 有網友提出一個需求，希望 Once 提供一個 Reset 方法，能夠將 Once 重置為初始化的狀態。比如下面的例子，St 通過兩個 Once 控制它的 Open/Close 狀態。但是在 Close 之後再調用 Open 的話，不會再執行 init 函數，因為 Once 只會執行一次初始化函數。</p>
-<pre><code>type St struct {
+<pre><code class="language-go">type St struct {
     openOnce *sync.Once
     closeOnce *sync.Once
 }
@@ -498,7 +498,7 @@ func(st *St) Close(){
 <p>所以提交這個 Issue 的開發者希望 Once 增加一個 Reset 方法，Reset 之後再調用 once.Do 就又可以初始化了。</p>
 <p>Go 的核心開發者 Ian Lance Taylor 給他了一個簡單的解決方案。在這個例子中，只使用一個 ponce *sync.Once 做初始化，Reset 的時候給 ponce 這個變量賦值一個新的 Once 實例即可 (ponce = new(sync.Once))。Once 的本意就是執行一次，所以 Reset 破壞了這個併發原語的本意。</p>
 <p>這個解決方案一點都沒問題，可以很好地解決這位開發者的需求。Docker 較早的版本（1.11.2）中使用了它們的一個網絡庫 libnetwork，這個網絡庫在使用 Once 的時候就使用 Ian Lance Taylor 介紹的方法，但是不幸的是，它的 Reset 方法中又改變了 Once 指針的值，導致程序 panic 了。原始邏輯比較複雜，一個簡化版可重現的代碼如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
   "fmt"
@@ -546,7 +546,7 @@ func main() {
 <p><img src="./images/299410d2e97b8e267b67f676e7ca1b37.png" alt="" /></p>
 <p>原因在於第 31 行執行 m.Once.Do 方法的時候，使用的是 m.Once 的指針，然後調用 m.refresh，在執行 m.refresh 的時候 Once 內部的 Mutex 首先會加鎖（可以再翻看一下這一講的 Once 的實現原理）， 但是，在 refresh 中更改了 Once 指針的值之後，結果在執行完 refresh 釋放鎖的時候，釋放的是一個剛初始化未加鎖的 Mutex，所以就 panic 了。</p>
 <p>如果你還不太明白，我再給你簡化成一個更簡單的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "sync"
@@ -575,10 +575,10 @@ func main() {
 <p>今天我們一起學習了 Once，我們常常使用它來實現單例模式。</p>
 <p>單例是 23 種設計模式之一，也是常常引起爭議的設計模式之一，甚至有人把它歸為反模式。為什麼說它是反模式呢，我拿標準庫中的單例模式給你介紹下。</p>
 <p>因為 Go 沒有 immutable 類型，導致我們聲明的全局變量都是可變的，別的地方或者第三方庫可以隨意更改這些變量。比如 package io 中定義了幾個全局變量，比如 io.EOF：</p>
-<pre><code>var EOF = errors.New("EOF")
+<pre><code class="language-go">var EOF = errors.New("EOF")
 </code></pre>
 <p>因為它是一個 package 級別的變量，我們可以在程序中偷偷把它改了，這會導致一些依賴 io.EOF 這個變量做判斷的代碼出錯。</p>
-<pre><code>io.EOF = errors.New("我們自己定義的EOF")
+<pre><code class="language-go">io.EOF = errors.New("我們自己定義的EOF")
 </code></pre>
 <p>從我個人的角度來說，一些單例（全局變量）的確很方便，比如 Buffer 池或者連接池，所以有時候我們也不要談虎色變。雖然有人把單例模式稱之為反模式，但畢竟只能代表一部分開發者的觀點，否則也不會把它列在 23 種設計模式中了。</p>
 <p>如果你真的擔心這個 package 級別的變量被人修改，你可以不把它們暴露出來，而是提供一個只讀的 GetXXX 的方法，這樣別人就不會進行修改了。</p>

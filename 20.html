@@ -194,7 +194,7 @@
 <p>我要先提醒你一句，如果你想運行我下面講到的測試代碼，就要先部署一個 etcd 的集群，或者部署一個 etcd 節點做測試。</p>
 <p>首先，我們來實現一個測試分佈式程序的框架：它會先從命令行中讀取命令，然後再執行相應的命令。你可以打開兩個窗口，模擬不同的節點，分別執行不同的命令。</p>
 <p>這個測試程序如下：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 // 導入所需的庫
 import (
@@ -267,7 +267,7 @@ func main() {
 <p>如果你的業務集群還沒有主節點，或者主節點宕機了，你就需要發起新一輪的選主操作，主要會用到 <strong>Campaign 和 Proclaim</strong>。如果你需要主節點放棄主的角色，讓其它從節點有機會成為主節點，就可以調用 <strong>Resign</strong> 方法。</p>
 <p>這裡我提到了三個和選主相關的方法，下面我來介紹下它們的用法。</p>
 <p><strong>第一個方法是 Campaign</strong>。它的作用是，把一個節點選舉為主節點，並且會設置一個值。它的簽名如下所示：</p>
-<pre><code>func (e *Election) Campaign(ctx context.Context, val string) error
+<pre><code class="language-go">func (e *Election) Campaign(ctx context.Context, val string) error
 </code></pre>
 <p>需要注意的是，這是一個阻塞方法，在調用它的時候會被阻塞，直到滿足下面的三個條件之一，才會取消阻塞。</p>
 <ol>
@@ -276,13 +276,13 @@ func main() {
 <li>ctx 被取消。</li>
 </ol>
 <p><strong>第二個方法是 Proclaim</strong>。它的作用是，重新設置 Leader 的值，但是不會重新選主，這個方法會返回新值設置成功或者失敗的信息。方法簽名如下所示：</p>
-<pre><code>func (e *Election) Proclaim(ctx context.Context, val string) error
+<pre><code class="language-go">func (e *Election) Proclaim(ctx context.Context, val string) error
 </code></pre>
 <p><strong>第三個方法是 Resign</strong>：開始新一次選舉。這個方法會返回新的選舉成功或者失敗的信息。它的簽名如下所示：</p>
-<pre><code>func (e *Election) Resign(ctx context.Context) (err error)
+<pre><code class="language-go">func (e *Election) Resign(ctx context.Context) (err error)
 </code></pre>
 <p>這三個方法的測試代碼如下。你可以使用測試程序進行測試，具體做法是，啟動兩個節點，執行和這三個方法相關的命令。</p>
-<pre><code>var count int
+<pre><code class="language-go">var count int
 // 選主
 func elect(e1 *concurrency.Election, electName string) {
     log.Println("acampaigning for ID:", *nodeID)
@@ -314,13 +314,13 @@ func resign(e1 *concurrency.Election, electName string) {
 }查詢除了選舉 Leader，程序在啟動的過程中，或者在運行的時候，還有可能需要查詢當前的主節點是哪一個節點？主節點的值是什麼？版本是多少？不光是主從節點需要查詢和知道哪一個節點，在分佈式系統中，還有其它一些節點也需要知道集群中的哪一個節點是主節點，哪一個節點是從節點，這樣它們才能把讀寫請求分別發往相應的主從節點上。
 </code></pre>
 <p>etcd 提供了查詢當前 Leader 的方法 <strong>Leader</strong>，如果當前還沒有 Leader，就返回一個錯誤，你可以使用這個方法來查詢主節點信息。這個方法的簽名如下：</p>
-<pre><code>func (e *Election) Leader(ctx context.Context) (*v3.GetResponse, error)
+<pre><code class="language-go">func (e *Election) Leader(ctx context.Context) (*v3.GetResponse, error)
 </code></pre>
 <p>每次主節點的變動都會生成一個新的版本號，你還可以查詢版本號信息（<strong>Rev</strong> 方法），瞭解主節點變動情況：</p>
-<pre><code>func (e *Election) Rev() int64
+<pre><code class="language-go">func (e *Election) Rev() int64
 </code></pre>
 <p>你可以在測試完選主命令後，測試查詢命令（query、rev），代碼如下：</p>
-<pre><code>// 查詢主的信息
+<pre><code class="language-go">// 查詢主的信息
 func query(e1 *concurrency.Election, electName string) {
     // 調用Leader返回主的信息，包括key和value等信息
     resp, err := e1.Leader(context.Background())
@@ -336,11 +336,11 @@ func rev(e1 *concurrency.Election, electName string) {
 }監控有了選舉和查詢方法，我們還需要一個監控方法。畢竟，如果主節點變化了，我們需要得到最新的主節點信息。
 </code></pre>
 <p>我們可以通過 Observe 來監控主的變化，它的簽名如下：</p>
-<pre><code>func (e *Election) Observe(ctx context.Context) &lt;-chan v3.GetResponse
+<pre><code class="language-go">func (e *Election) Observe(ctx context.Context) &lt;-chan v3.GetResponse
 </code></pre>
 <p>它會返回一個 chan，顯示主節點的變動信息。需要注意的是，它不會返回主節點的全部歷史變動信息，而是隻返回最近的一條變動信息以及之後的變動信息。</p>
 <p>它的測試代碼如下：</p>
-<pre><code>func watch(e1 *concurrency.Election, electName string) {
+<pre><code class="language-go">func watch(e1 *concurrency.Election, electName string) {
     ch := e1.Observe(context.TODO())
 
     log.Println("start to watch for ID:", *nodeID)
@@ -359,10 +359,10 @@ func rev(e1 *concurrency.Election, electName string) {
 <p>下面，我們就來學習下互斥鎖相關的兩個原語，即 Locker 和 Mutex。</p>
 <h2 id="locker"><a class="header" href="#locker">Locker</a></h2>
 <p>etcd 提供了一個簡單的 Locker 原語，它類似於 Go 標準庫中的 sync.Locker 接口，也提供了 Lock/UnLock 的機制：</p>
-<pre><code>func NewLocker(s *Session, pfx string) sync.Locker
+<pre><code class="language-go">func NewLocker(s *Session, pfx string) sync.Locker
 </code></pre>
 <p>可以看到，它的返回值是一個 sync.Locker，因為你對標準庫的 Locker 已經非常瞭解了，而且它只有 Lock/Unlock 兩個方法，所以，接下來使用這個鎖就非常容易了。下面的代碼是一個使用 Locker 併發原語的例子：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "flag"
@@ -420,7 +420,7 @@ func useLock(cli *clientv3.Client) {
 <p>你可以同時在兩個終端中運行這個測試程序。可以看到，它們獲得鎖是有先後順序的，一個節點釋放了鎖之後，另外一個節點才能獲取到這個分佈式鎖。</p>
 <h2 id="mutex"><a class="header" href="#mutex">Mutex</a></h2>
 <p>事實上，剛剛說的 Locker 是基於 Mutex 實現的，只不過，Mutex 提供了查詢 Mutex 的 key 的信息的功能。測試代碼也類似：</p>
-<pre><code>func useMutex(cli *clientv3.Client) {
+<pre><code class="language-go">func useMutex(cli *clientv3.Client) {
     // 為鎖生成session
     s1, err := concurrency.NewSession(cli)
     if err != nil {
@@ -452,7 +452,7 @@ func useLock(cli *clientv3.Client) {
 <h1 id="讀寫鎖"><a class="header" href="#讀寫鎖">讀寫鎖</a></h1>
 <p>學完了分佈式 Locker 和互斥鎖 Mutex，你肯定會聯想到讀寫鎖 RWMutex。是的，etcd 也提供了分佈式的讀寫鎖。不過，互斥鎖 Mutex 是在 github.com/coreos/etcd/clientv3/concurrency 包中提供的，讀寫鎖 RWMutex 卻是在 github.com/coreos/etcd/contrib/recipes 包中提供的。</p>
 <p>etcd 提供的分佈式讀寫鎖的功能和標準庫的讀寫鎖的功能是一樣的。只不過，<strong>etcd 提供的讀寫鎖，可以在分佈式環境中的不同的節點使用</strong>。它提供的方法也和標準庫中的讀寫鎖的方法一致，分別提供了 RLock/RUnlock、Lock/Unlock 方法。下面的代碼是使用讀寫鎖的例子，它從命令行中讀取命令，執行讀寫鎖的操作：</p>
-<pre><code>package main
+<pre><code class="language-go">package main
 
 import (
     "bufio"

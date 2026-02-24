@@ -195,7 +195,7 @@
 </ol>
 <p>下面，我們來看具體的實現方法。</p>
 <p>首先，SingleFlight 定義一個輔助對象 call，這個 call 就代表正在執行 fn 函數的請求或者是已經執行完的請求。Group 代表 SingleFlight。</p>
-<pre><code>  // 代表一個正在處理的請求，或者已經處理完的請求
+<pre><code class="language-go">  // 代表一個正在處理的請求，或者已經處理完的請求
   type call struct {
     wg sync.WaitGroup
   
@@ -218,7 +218,7 @@
   }
 </code></pre>
 <p>我們只需要查看一個 Do 方法，DoChan 的處理方法是類似的。</p>
-<pre><code>  func (g *Group) Do(key string, fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
+<pre><code class="language-go">  func (g *Group) Do(key string, fn func() (interface{}, error)) (v interface{}, err error, shared bool) {
     g.mu.Lock()
     if g.m == nil {
       g.m = make(map[string]*call)
@@ -240,7 +240,7 @@
   }
 </code></pre>
 <p>doCall 方法會實際調用函數 fn：</p>
-<pre><code>  func (g *Group) doCall(c *call, key string, fn func() (interface{}, error)) {
+<pre><code class="language-go">  func (g *Group) doCall(c *call, key string, fn func() (interface{}, error)) {
     c.val, c.err = fn()
     c.wg.Done()
   
@@ -261,13 +261,13 @@
 <p>瞭解了 SingleFlight 的實現原理，下面我們來看看它都應用於什麼場景中。</p>
 <p>Go 代碼庫中有兩個地方用到了 SingleFlight。</p>
 <p>第一個是在net/lookup.go中，如果同時有查詢同一個 host 的請求，lookupGroup 會把這些請求 merge 到一起，只需要一個請求就可以了：</p>
-<pre><code>// lookupGroup merges LookupIPAddr calls together for lookups for the same
+<pre><code class="language-go">// lookupGroup merges LookupIPAddr calls together for lookups for the same
 // host. The lookupGroup key is the LookupIPAddr.host argument.
 // The return values are ([]IPAddr, error).
 lookupGroup singleflight.Group
 </code></pre>
 <p>第二個是 Go 在查詢倉庫版本信息時，將併發的請求合併成 1 個請求：</p>
-<pre><code>func metaImportsForPrefix(importPrefix string, mod ModuleMode, security web.SecurityMode) (*urlpkg.URL, []metaImport, error) {
+<pre><code class="language-go">func metaImportsForPrefix(importPrefix string, mod ModuleMode, security web.SecurityMode) (*urlpkg.URL, []metaImport, error) {
         // 使用緩存保存請求結果
     setCache := func(res fetchResult) (fetchResult, error) {
       fetchCacheMu.Lock()
@@ -291,10 +291,10 @@ lookupGroup singleflight.Group
 <p>用 SingleFlight 來解決緩存擊穿問題再合適不過了。因為，這個時候，只要這些對同一個 key 的併發請求的其中一個到數據庫中查詢，就可以了，這些併發的請求可以共享同一個結果。因為是緩存查詢，不用考慮冪等性問題。</p>
 <p>事實上，在 Go 生態圈知名的緩存框架 groupcache 中，就使用了較早的 Go 標準庫的 SingleFlight 實現。接下來，我就來給你介紹一下 groupcache 是如何使用 SingleFlight 解決緩存擊穿問題的。</p>
 <p>groupcache 中的 SingleFlight 只有一個方法：</p>
-<pre><code>func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, error)
+<pre><code class="language-go">func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, error)
 </code></pre>
 <p>SingleFlight 的作用是，在加載一個緩存項的時候，合併對同一個 key 的 load 的併發請求：</p>
-<pre><code>  type Group struct {
+<pre><code class="language-go">  type Group struct {
     。。。。。。
     // loadGroup ensures that each key is only fetched once
     // (either locally or remotely), regardless of the number of
@@ -333,11 +333,11 @@ lookupGroup singleflight.Group
 <li>第二個方法是 NewWithAction，它額外提供一個函數，可以在每一次到達執行點的時候執行一次。具體的時間點是在最後一個參與者到達之後，但是其它的參與者還未被放行之前。我們可以利用它，做放行之前的一些共享狀態的更新等操作。</li>
 </ol>
 <p>這兩個方法的簽名如下：</p>
-<pre><code>func New(parties int) CyclicBarrier
+<pre><code class="language-go">func New(parties int) CyclicBarrier
 func NewWithAction(parties int, barrierAction func() error) CyclicBarrier
 </code></pre>
 <p>CyclicBarrier 是一個接口，定義的方法如下：</p>
-<pre><code>type CyclicBarrier interface {
+<pre><code class="language-go">type CyclicBarrier interface {
     // 等待所有的參與者到達，如果被ctx.Done()中斷，會返回ErrBrokenBarrier
     Await(ctx context.Context) error
 
@@ -378,7 +378,7 @@ func NewWithAction(parties int, barrierAction func() error) CyclicBarrier
 <li>循環柵欄：等待兩個氫原子和一個氧原子填補空槽，直到任務完成。</li>
 </ol>
 <p>我們來看下具體的代碼：</p>
-<pre><code>package water
+<pre><code class="language-go">package water
 import (
   "context"
   "github.com/marusama/cyclicbarrier"
@@ -400,7 +400,7 @@ func New() *H2O {
 </code></pre>
 <p>接下來，我們看看各條流水線的處理情況。</p>
 <p>流水線分為氫原子處理流水線和氧原子處理流水線，首先，我們先看一下氫原子的流水線：如果有可用的空槽，氫原子的流水線的處理方法是 hydrogen，hydrogen 方法就會佔用一個空槽（h2o.semaH.Acquire），輸出一個 H 字符，然後等待柵欄放行。等其它的 goroutine 填補了氫原子的另一個空槽和氧原子的空槽之後，程序才可以繼續進行。</p>
-<pre><code>func (h2o *H2O) hydrogen(releaseHydrogen func()) {
+<pre><code class="language-go">func (h2o *H2O) hydrogen(releaseHydrogen func()) {
   h2o.semaH.Acquire(context.Background(), 1)
 
   releaseHydrogen() // 輸出H
@@ -409,7 +409,7 @@ func New() *H2O {
 }
 </code></pre>
 <p>然後是氧原子的流水線。氧原子的流水線處理方法是 oxygen， oxygen 方法是等待氧原子的空槽，然後輸出一個 O，就等待柵欄放行。放行後，釋放氧原子空槽位。</p>
-<pre><code>func (h2o *H2O) oxygen(releaseOxygen func()) {
+<pre><code class="language-go">func (h2o *H2O) oxygen(releaseOxygen func()) {
   h2o.semaO.Acquire(context.Background(), 1)
 
   releaseOxygen() // 輸出O
@@ -419,7 +419,7 @@ func New() *H2O {
 </code></pre>
 <p>在柵欄放行之前，只有兩個氫原子的空槽位和一個氧原子的空槽位。只有等柵欄放行之後，這些空槽位才會被釋放。柵欄放行，就意味著一個水分子組成成功。</p>
 <p>這個算法是不是正確呢？我們來編寫一個單元測試檢測一下。</p>
-<pre><code>package water
+<pre><code class="language-go">package water
 
 import (
     "math/rand"
@@ -490,7 +490,7 @@ func TestWaterFactory(t *testing.T) {
 }總結每一個併發原語都有它存在的道理，也都有它應用的場景。
 </code></pre>
 <p>如果你沒有學習 CyclicBarrier，你可能只會想到，用 WaitGroup 來實現這個水分子製造工廠的例子。</p>
-<pre><code>type H2O struct {
+<pre><code class="language-go">type H2O struct {
     semaH *semaphore.Weighted
     semaO *semaphore.Weighted
     wg    sync.WaitGroup //將循環柵欄替換成WaitGroup

@@ -188,7 +188,7 @@
 <p>我們先來看怎麼實現一個最簡單的互斥鎖。在開始之前，你可以先想一想，如果是你，你會怎麼設計呢？</p>
 <p>你可能會想到，可以通過一個 flag 變量，標記當前的鎖是否被某個 goroutine 持有。如果這個 flag 的值是 1，就代表鎖已經被持有，那麼，其它競爭的 goroutine 只能等待；如果這個 flag 的值是 0，就可以通過 CAS（compare-and-swap，或者 compare-and-set）將這個 flag 設置為 1，標識鎖被當前的這個 goroutine 持有了。</p>
 <p>實際上，Russ Cox 在 2008 年提交的第一版 Mutex 就是這樣實現的。</p>
-<pre><code>   // CAS操作，當時還沒有抽象出atomic包
+<pre><code class="language-go">   // CAS操作，當時還沒有抽象出atomic包
     func cas(val *int32, old, new int32) bool
     func semacquire(*int32)
     func semrelease(*int32)
@@ -245,7 +245,7 @@
 <p>所以，我們在使用 Mutex 的時候，必須要保證 goroutine 儘可能不去釋放自己未持有的鎖，一定要遵循“<strong>誰申請，誰釋放</strong>”的原則。在真實的實踐中，我們使用互斥鎖的時候，很少在一個方法中單獨申請鎖，而在另外一個方法中單獨釋放鎖，一般都會在同一個方法中獲取鎖和釋放鎖。</p>
 <p>如果你接觸過其它語言（比如 Java 語言）的互斥鎖的實現，就會發現這一點和其它語言的互斥鎖不同，所以，如果是從其它語言轉到 Go 語言開發的同學，一定要注意。</p>
 <p>以前，我們經常會基於性能的考慮，及時釋放掉鎖，所以在一些 if-else 分支中加上釋放鎖的代碼，代碼看起來很臃腫。而且，在重構的時候，也很容易因為誤刪或者是漏掉而出現死鎖的現象。</p>
-<pre><code>type Foo struct {
+<pre><code class="language-go">type Foo struct {
     mu    sync.Mutex
     count int
 }
@@ -265,7 +265,7 @@ func (f *Foo) Bar() {
 }
 </code></pre>
 <p>從 1.14 版本起，Go 對 defer 做了優化，採用更有效的內聯方式，取代之前的生成 defer 對象到 defer chain 中，defer 對耗時的影響微乎其微了，所以基本上修改成下面簡潔的寫法也沒問題：</p>
-<pre><code>func (f *Foo) Bar() {
+<pre><code class="language-go">func (f *Foo) Bar() {
     f.mu.Lock()
     defer f.mu.Unlock()
 
@@ -285,7 +285,7 @@ func (f *Foo) Bar() {
 <p>接下來，我們就繼續探索 Go 開發者是怎麼解決這個問題的。</p>
 <h1 id="給新人機會"><a class="header" href="#給新人機會">給新人機會</a></h1>
 <p>Go 開發者在 2011 年 6 月 30 日的 commit 中對 Mutex 做了一次大的調整，調整後的 Mutex 實現如下：</p>
-<pre><code>   type Mutex struct {
+<pre><code class="language-go">   type Mutex struct {
         state int32
         sema  uint32
     }
@@ -300,7 +300,7 @@ func (f *Foo) Bar() {
 <p><img src="./images/3f39023e811a9d7557ae18ec3502bf4e.png" alt="" /></p>
 <p>state 是一個複合型的字段，一個字段包含多個意義，這樣可以通過儘可能少的內存來實現互斥鎖。這個字段的第一位（最小的一位）來表示這個鎖是否被持有，第二位代表是否有喚醒的 goroutine，剩餘的位數代表的是等待此鎖的 goroutine 數。所以，state 這一個字段被分成了三部分，代表三個數據。</p>
 <p>請求鎖的方法 Lock 也變得複雜了。複雜之處不僅僅在於對字段 state 的操作難以理解，而且代碼邏輯也變得相當複雜。</p>
-<pre><code>   func (m *Mutex) Lock() {
+<pre><code class="language-go">   func (m *Mutex) Lock() {
         // Fast path: 幸運case，能夠直接獲取到鎖
         if atomic.CompareAndSwapInt32(&amp;m.state, 0, mutexLocked) {
             return
@@ -337,7 +337,7 @@ func (f *Foo) Bar() {
 <p>請求鎖的 goroutine 有兩類，一類是新來請求鎖的 goroutine，另一類是被喚醒的等待請求鎖的 goroutine。鎖的狀態也有兩種：加鎖和未加鎖。我用一張表格，來說明一下 goroutine 不同來源不同狀態下的處理邏輯。</p>
 <p><img src="./images/1dd95f067c4a53169dc0cdfa06a5b12a.png" alt="" /></p>
 <p>剛剛說的都是獲取鎖，接下來，我們再來看看釋放鎖。釋放鎖的 Unlock 方法也有些複雜，我們來看一下。</p>
-<pre><code>   func (m *Mutex) Unlock() {
+<pre><code class="language-go">   func (m *Mutex) Unlock() {
         // Fast path: drop lock bit.
         new := atomic.AddInt32(&amp;m.state, -mutexLocked) //去掉鎖標誌
         if (new+mutexLocked)&amp;mutexLocked == 0 { //本來就沒有加鎖
@@ -368,7 +368,7 @@ func (f *Foo) Bar() {
 <p>雖然這一版的 Mutex 已經給新來請求鎖的 goroutine 一些機會，讓它參與競爭，沒有空閒的鎖或者競爭失敗才加入到等待隊列中。但是其實還可以進一步優化。我們接著往下看。</p>
 <h1 id="多給些機會"><a class="header" href="#多給些機會">多給些機會</a></h1>
 <p>在 2015 年 2 月的改動中，如果新來的 goroutine 或者是被喚醒的 goroutine 首次獲取不到鎖，它們就會通過自旋（spin，通過循環不斷嘗試，spin 的邏輯是在runtime 實現的）的方式，嘗試檢查鎖是否被釋放。在嘗試一定的自旋次數後，再執行原來的邏輯。</p>
-<pre><code>   func (m *Mutex) Lock() {
+<pre><code class="language-go">   func (m *Mutex) Lock() {
         // Fast path: 幸運之路，正好獲取到鎖
         if atomic.CompareAndSwapInt32(&amp;m.state, 0, mutexLocked) {
             return
@@ -420,7 +420,7 @@ func (f *Foo) Bar() {
 <p>當然，現在的 Mutex 代碼已經複雜得接近不可讀的狀態了，而且代碼也非常長，刪減後佔了幾乎三頁紙。但是，作為第一個要詳細介紹的同步原語，我還是希望能更清楚地剖析 Mutex 的實現，向你展示它的演化和為了一個貌似很小的 feature 不得不將代碼變得非常複雜的原因。</p>
 <p><img src="./images/bf361c9b5c1a47ab071df0a6a8801237.png" alt="" /></p>
 <p>當然，你也可以暫時略過這一段，以後慢慢品，<strong>只需要記住，Mutex 絕不容忍一個 goroutine 被落下，永遠沒有機會獲取鎖。不拋棄不放棄是它的宗旨，而且它也儘可能地讓等待較長的 goroutine 更有機會獲取到鎖</strong>。</p>
-<pre><code>   type Mutex struct {
+<pre><code class="language-go">   type Mutex struct {
         state int32
         sema  uint32
     }
